@@ -1,11 +1,12 @@
 import AppKit
 
-/// One window per document. The chrome-free window shell; the document view arrives in milestone 2.
+/// One window per document, with no visible chrome.
 @MainActor
 final class DocumentWindowController: NSWindowController, NSWindowDelegate {
     private(set) var url: URL?
     var onClose: (() -> Void)?
 
+    private var documentController: DocumentViewController?
     private let placeholder = NSTextField(labelWithString: "")
 
     init(url: URL?) {
@@ -17,23 +18,14 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate {
         )
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
-        window.isMovableByWindowBackground = true
         window.tabbingMode = .preferred
-        window.backgroundColor = .windowBackgroundColor
         window.center()
         super.init(window: window)
         window.delegate = self
 
         placeholder.textColor = .tertiaryLabelColor
         placeholder.font = .monospacedSystemFont(ofSize: 13, weight: .regular)
-        placeholder.translatesAutoresizingMaskIntoConstraints = false
-        window.contentView?.addSubview(placeholder)
-        if let content = window.contentView {
-            NSLayoutConstraint.activate([
-                placeholder.centerXAnchor.constraint(equalTo: content.centerXAnchor),
-                placeholder.centerYAnchor.constraint(equalTo: content.centerYAnchor),
-            ])
-        }
+        placeholder.alignment = .center
         load(url)
     }
 
@@ -42,9 +34,45 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate {
 
     func load(_ url: URL?) {
         self.url = url
-        window?.title = url?.lastPathComponent ?? "rill"
-        if let url { window?.representedURL = url }
-        placeholder.stringValue = url?.lastPathComponent ?? "rill — no document"
+        guard let window else { return }
+        window.title = url?.lastPathComponent ?? "rill"
+        window.representedURL = url
+
+        guard let url else { return showPlaceholder("rill — no document") }
+        do {
+            let controller = DocumentViewController(source: try PDFSource(url: url))
+            documentController = controller
+            window.contentViewController = controller
+            window.setContentSize(NSSize(width: 900, height: 1100))
+            DebugSnapshot.runIfRequested(window: window, document: controller)
+        } catch {
+            showPlaceholder("could not open \(url.lastPathComponent)\n\(error.localizedDescription)")
+        }
+    }
+
+    private func showPlaceholder(_ message: String) {
+        documentController = nil
+        let container = NSView()
+        placeholder.stringValue = message
+        placeholder.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(placeholder)
+        NSLayoutConstraint.activate([
+            placeholder.centerXAnchor.constraint(equalTo: container.centerXAnchor),
+            placeholder.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+        ])
+        window?.contentViewController = nil
+        window?.contentView = container
+    }
+
+    // Nothing in the document view takes focus, so keys travel up the responder chain
+    // (window → window controller) and land here. Views that do want keys, like a future
+    // picker's text field, get them first.
+    override func keyDown(with event: NSEvent) {
+        if documentController?.handleKeyDown(event) != true { super.keyDown(with: event) }
+    }
+
+    override func keyUp(with event: NSEvent) {
+        documentController?.handleKeyUp(event)
     }
 
     func windowWillClose(_ notification: Notification) {
