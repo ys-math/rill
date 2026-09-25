@@ -54,6 +54,17 @@ struct KeyResolverTests {
         #expect(r.feed("<S-Space>") == .action(.screenUp, count: nil))
     }
 
+    @Test func arrowKeysMirrorHJKL() {
+        var r = KeyResolver()
+        #expect(r.feed("<Down>") == .action(.scrollDown, count: nil))
+        #expect(r.feed("<Up>") == .action(.scrollUp, count: nil))
+        #expect(r.feed("<Left>") == .action(.scrollLeft, count: nil))
+        #expect(r.feed("<Right>") == .action(.scrollRight, count: nil))
+        #expect(r.feed("3") == .pending(display: "3"))
+        #expect(r.feed("<Down>") == .action(.scrollDown, count: 3))
+        #expect(Action.scrollDown.isContinuous)
+    }
+
     @Test func customKeymap() {
         var r = KeyResolver(keymap: ["<C-f>": .screenDown, "zz": .fitPage])
         #expect(r.feed("j") == .unbound)

@@ -36,8 +36,8 @@ Compile with SyncTeX enabled (vimtex's latexmk defaults already pass `-synctex=1
 
 | Key | Action |
 |---|---|
-| `j` / `k` (hold to scroll) | Scroll down / up |
-| `h` / `l` | Scroll left / right |
+| `j` / `k`, `↓` / `↑` (hold to scroll) | Scroll down / up |
+| `h` / `l`, `←` / `→` | Scroll left / right |
 | `d` / `u`, `⌃d` / `⌃u` | Half screen down / up |
 | `Space` / `⇧Space` | Screen down / up |
 | `J` / `K` | Next / previous page |
