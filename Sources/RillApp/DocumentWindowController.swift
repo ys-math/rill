@@ -1,15 +1,20 @@
 import AppKit
+import RillCore
 
-/// One window per document, with no visible chrome.
+/// One window per document, with no visible chrome. Owns the file watcher and the
+/// document's remembered state.
 @MainActor
 final class DocumentWindowController: NSWindowController, NSWindowDelegate {
     private(set) var url: URL?
     var onClose: (() -> Void)?
 
+    private let store: DocumentStateStore
     private var documentController: DocumentViewController?
+    private var reloader: DocumentReloader?
     private let placeholder = NSTextField(labelWithString: "")
 
-    init(url: URL?) {
+    init(url: URL?, store: DocumentStateStore) {
+        self.store = store
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 900, height: 1100),
             styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
@@ -33,6 +38,9 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate {
     required init?(coder: NSCoder) { fatalError() }
 
     func load(_ url: URL?) {
+        saveState()
+        reloader?.stop()
+        reloader = nil
         self.url = url
         guard let window else { return }
         window.title = url?.lastPathComponent ?? "rill"
@@ -40,14 +48,28 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate {
 
         guard let url else { return showPlaceholder("rill — no document") }
         do {
-            let controller = DocumentViewController(source: try PDFSource(url: url))
+            let source = try PDFSource(url: url)
+            let controller = DocumentViewController(source: source, state: store.state(forPath: url.path))
             documentController = controller
             window.contentViewController = controller
             window.setContentSize(NSSize(width: 900, height: 1100))
+
+            let reloader = DocumentReloader(url: url, current: source)
+            reloader.onReload = { [weak controller] in controller?.replace(with: $0, noticed: $1) }
+            controller.onReloadRequested = { [weak reloader] in reloader?.forceReload() }
+            reloader.start()
+            self.reloader = reloader
+
             DebugSnapshot.runIfRequested(window: window, document: controller)
         } catch {
             showPlaceholder("could not open \(url.lastPathComponent)\n\(error.localizedDescription)")
         }
+    }
+
+    /// Records where the document is scrolled to. The store is written to disk by the app delegate.
+    func saveState() {
+        guard let url, let documentController, documentController.isViewLoaded else { return }
+        store.set(documentController.currentState(), forPath: url.path)
     }
 
     private func showPlaceholder(_ message: String) {
@@ -75,7 +97,15 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate {
         documentController?.handleKeyUp(event)
     }
 
+    func windowDidResignKey(_ notification: Notification) {
+        saveState()
+        try? store.save()
+    }
+
     func windowWillClose(_ notification: Notification) {
+        saveState()
+        try? store.save()
+        reloader?.stop()
         onClose?()
     }
 }

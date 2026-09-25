@@ -23,6 +23,8 @@ final class DocumentView: NSView {
         self?.install(request, image)
     }
     private var currentLevel = 0
+    /// Tiles still missing before `prepare`'s completion fires.
+    private var readiness: (missing: Set<TileKey>, completion: () -> Void)?
 
     init(source: PDFSource, layout: PageLayout) {
         self.source = source
@@ -46,7 +48,7 @@ final class DocumentView: NSView {
     /// Brings rendering in line with what's on screen. Called on every scroll and zoom frame,
     /// so it only does bookkeeping; rendering happens on the scheduler's threads.
     /// - Parameter settled: false while zoom is changing; tiles are then left alone until it settles.
-    func updateContent(visible: CGRect, magnification: CGFloat, settled: Bool) {
+    func updateContent(visible: CGRect, magnification: CGFloat, backingScale: CGFloat, settled: Bool) {
         guard let visiblePages = layout.pages(inYRange: visible.minY, visible.maxY) else { return }
         let prefetch = visible.insetBy(dx: 0, dy: -visible.height)
         let prefetchPages = layout.pages(inYRange: prefetch.minY, prefetch.maxY) ?? visiblePages
@@ -63,7 +65,7 @@ final class DocumentView: NSView {
         }
 
         if settled {
-            currentLevel = TileGrid.level(forPixelsPerPoint: magnification * (window?.backingScaleFactor ?? 2))
+            currentLevel = TileGrid.level(forPixelsPerPoint: magnification * backingScale)
             for index in prefetchPages {
                 let frame = layout.pageFrames[index]
                 let region = (visiblePages.contains(index) ? visible : prefetch).offsetBy(dx: -frame.minX, dy: -frame.minY)
@@ -84,6 +86,27 @@ final class DocumentView: NSView {
         for index in max(range.lowerBound, 0)...min(range.upperBound, pages.count - 1) where !pages[index].hasThumbnail {
             if let image = scheduler.renderNow(.thumbnail(page: index)) { pages[index].setThumbnail(image) }
         }
+    }
+
+    /// Renders what `visible` needs while this view is still offscreen, then calls `completion`
+    /// once every visible tile is in, so it can be swapped in without a soft or blank frame.
+    func prepare(visible: CGRect, magnification: CGFloat, backingScale: CGFloat, completion: @escaping () -> Void) {
+        if let pages = layout.pages(inYRange: visible.minY, visible.maxY) { ensureThumbnails(pages) }
+        updateContent(visible: visible, magnification: magnification, backingScale: backingScale, settled: true)
+        var missing = Set<TileKey>()
+        for index in layout.pages(inYRange: visible.minY, visible.maxY) ?? 0...(-1) {
+            let frame = layout.pageFrames[index]
+            let region = visible.offsetBy(dx: -frame.minX, dy: -frame.minY)
+            missing.formUnion(TileGrid.keys(page: index, level: currentLevel, pageSize: frame.size, visible: region)
+                .filter { tiles[$0] == nil })
+        }
+        if missing.isEmpty { completion() } else { readiness = (missing, completion) }
+    }
+
+    /// Stops all rendering. Call before discarding the view.
+    func teardown() {
+        readiness = nil
+        scheduler.cancelAll()
     }
 
     // MARK: - Private
@@ -116,6 +139,15 @@ final class DocumentView: NSView {
                 tile.add(fade, forKey: "fade")
             }
             retireOldLevels(onPage: key.page)
+            if var ready = readiness {
+                ready.missing.remove(key)
+                if ready.missing.isEmpty {
+                    readiness = nil
+                    ready.completion()
+                } else {
+                    readiness = ready
+                }
+            }
         }
     }
 
