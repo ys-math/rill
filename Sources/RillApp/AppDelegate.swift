@@ -1,7 +1,10 @@
 import AppKit
+import RillCore
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    private let store = DocumentStateStore(
+        fileURL: ProcessInfo.processInfo.environment["RILL_STATE_FILE"].map { URL(fileURLWithPath: $0) } ?? DocumentStateStore.defaultURL)
     private var windows: [DocumentWindowController] = []
     private var openedAnyDocument = false
 
@@ -10,7 +13,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Files passed at launch arrive via application(_:open:) before this returns control
         // to the run loop, so defer the empty-window check by one turn.
         DispatchQueue.main.async { [self] in
-            if !openedAnyDocument { show(DocumentWindowController(url: nil)) }
+            if !openedAnyDocument { show(DocumentWindowController(url: nil, store: store)) }
             NSApp.activate()
         }
     }
@@ -23,9 +26,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             } else if let empty = windows.first(where: { $0.url == nil }) {
                 empty.load(url)
             } else {
-                show(DocumentWindowController(url: url))
+                show(DocumentWindowController(url: url, store: store))
             }
         }
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        for window in windows { window.saveState() }
+        try? store.save()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }

@@ -6,10 +6,13 @@ import RillCore
 final class DocumentViewController: NSViewController {
     enum ZoomMode { case fitWidth, fitPage, custom }
 
-    let source: PDFSource
-    private let layout: PageLayout
+    /// A reload that hasn't finished rendering yet gets swapped in anyway after this long.
+    private static let reloadSwapTimeout: Duration = .milliseconds(500)
+
+    private(set) var source: PDFSource
+    private var layout: PageLayout
     private let scrollView = DocumentScrollView(frame: .zero)
-    private let documentView: DocumentView
+    private var documentView: DocumentView
     private let hud = FrameHUD(frame: .zero)
     private lazy var motion = Motion(scrollView: scrollView)
     private var resolver = KeyResolver()
@@ -17,11 +20,18 @@ final class DocumentViewController: NSViewController {
     /// keyCode of the key driving continuous scrolling, so its keyUp ends it.
     private var continuousKey: UInt16?
     private var didInitialLayout = false
+    private let initialState: DocumentState?
+    /// A new version rendering offscreen, waiting to be swapped in.
+    private var pendingReload: (view: DocumentView, timeout: Task<Void, Never>)?
 
-    init(source: PDFSource) {
+    /// `r` was pressed.
+    var onReloadRequested: (() -> Void)?
+
+    init(source: PDFSource, state: DocumentState?) {
         self.source = source
         self.layout = PageLayout(pageSizes: source.pageSizes)
         self.documentView = DocumentView(source: source, layout: layout)
+        self.initialState = state
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -68,11 +78,95 @@ final class DocumentViewController: NSViewController {
         super.viewDidLayout()
         guard !didInitialLayout, scrollView.bounds.width > 0 else { return }
         didInitialLayout = true
-        scrollView.magnification = layout.fitWidthMagnification(viewportWidth: scrollView.contentSize.width)
-        scrollView.contentView.scroll(to: CGPoint(x: 0, y: 0))
+        let state = initialState ?? DocumentState(position: PagePosition(page: 0, offset: 0), zoom: .fitWidth)
+        let placement = placement(of: state, in: layout)
+        zoomMode = placement.mode
+        scrollView.magnification = placement.magnification
+        scrollView.contentView.scroll(to: placement.origin)
         scrollView.reflectScrolledClipView(scrollView.contentView)
         refresh(settled: true)
     }
+
+    // MARK: - State and reload
+
+    /// Where the viewer is now, in layout-independent terms.
+    func currentState() -> DocumentState {
+        let zoom: ZoomSetting = switch zoomMode {
+        case .fitWidth: .fitWidth
+        case .fitPage: .fitPage
+        case .custom: .magnification(Double(scrollView.magnification))
+        }
+        return DocumentState(position: layout.position(atY: motion.origin.y), x: Double(motion.origin.x), zoom: zoom)
+    }
+
+    /// Shows a new version of the document at the same place. The new version renders
+    /// offscreen first and is swapped in within a single frame once its visible tiles are
+    /// ready (or after a short timeout, with thumbnails standing in).
+    func replace(with newSource: PDFSource, noticed: ContinuousClock.Instant = .now) {
+        cancelPendingReload()
+        let newLayout = PageLayout(pageSizes: newSource.pageSizes)
+        let newView = DocumentView(source: newSource, layout: newLayout)
+        let target = placement(of: currentState(), in: newLayout)
+        let visible = CGRect(origin: target.origin,
+                             size: CGSize(width: scrollView.contentSize.width / target.magnification,
+                                          height: scrollView.contentSize.height / target.magnification))
+
+        let timeout = Task { [weak self] in
+            try? await Task.sleep(for: Self.reloadSwapTimeout)
+            if !Task.isCancelled {
+                reloadLog.notice("swap timed out waiting for tiles")
+                self?.swapIn(newView, source: newSource, layout: newLayout, noticed: noticed)
+            }
+        }
+        pendingReload = (newView, timeout)
+        newView.prepare(visible: visible, magnification: target.magnification, backingScale: backingScale) { [weak self] in
+            self?.swapIn(newView, source: newSource, layout: newLayout, noticed: noticed)
+        }
+    }
+
+    private func swapIn(_ newView: DocumentView, source newSource: PDFSource, layout newLayout: PageLayout,
+                        noticed: ContinuousClock.Instant) {
+        guard pendingReload?.view === newView else { return }
+        pendingReload?.timeout.cancel()
+        pendingReload = nil
+
+        // Measure again: the user may have scrolled while the new version rendered.
+        let target = placement(of: currentState(), in: newLayout)
+        motion.stop()
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        documentView.teardown()
+        source = newSource
+        layout = newLayout
+        documentView = newView
+        scrollView.documentView = newView
+        scrollView.magnification = target.magnification
+        scrollView.contentView.scroll(to: target.origin)
+        scrollView.reflectScrolledClipView(scrollView.contentView)
+        CATransaction.commit()
+        refresh(settled: true)
+        reloadLog.debug("swapped in \((ContinuousClock.now - noticed).formatted(.units(allowed: [.milliseconds])), privacy: .public) after the change")
+    }
+
+    private func cancelPendingReload() {
+        guard let pending = pendingReload else { return }
+        pending.timeout.cancel()
+        pending.view.teardown()
+        pendingReload = nil
+    }
+
+    private func placement(of state: DocumentState, in layout: PageLayout) -> (magnification: CGFloat, origin: CGPoint, mode: ZoomMode) {
+        let viewport = scrollView.contentSize
+        let (magnification, mode): (CGFloat, ZoomMode) = switch state.zoom {
+        case .fitWidth: (layout.fitWidthMagnification(viewportWidth: viewport.width), .fitWidth)
+        case .fitPage: (layout.fitPageMagnification(page: state.position.page, viewport: viewport), .fitPage)
+        case .magnification(let m): (CGFloat(m), .custom)
+        }
+        let clamped = min(max(magnification, scrollView.minMagnification), scrollView.maxMagnification)
+        return (clamped, CGPoint(x: state.x, y: layout.y(for: state.position)), mode)
+    }
+
+    private var backingScale: CGFloat { view.window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2 }
 
     override func viewDidAppear() {
         super.viewDidAppear()
@@ -109,7 +203,6 @@ final class DocumentViewController: NSViewController {
     }
 
     var debugOrigin: CGPoint { motion.origin }
-
 
     /// Feeds a key sequence as if typed, without continuous scrolling. For debugging and tests.
     func feed(keys sequence: String) {
@@ -163,6 +256,7 @@ final class DocumentViewController: NSViewController {
         case .fitWidth: fitWidth(animated: true)
         case .fitPage: fitPage()
         case .toggleFrameHUD: hud.toggle()
+        case .reload: onReloadRequested?()
         }
     }
 
@@ -227,7 +321,7 @@ final class DocumentViewController: NSViewController {
     }
 
     private func refresh(settled: Bool) {
-        documentView.updateContent(visible: scrollView.contentView.bounds,
-                                   magnification: scrollView.magnification, settled: settled)
+        documentView.updateContent(visible: scrollView.contentView.bounds, magnification: scrollView.magnification,
+                                   backingScale: backingScale, settled: settled)
     }
 }

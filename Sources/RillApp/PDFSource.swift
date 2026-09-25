@@ -11,12 +11,16 @@ final class PDFSource: @unchecked Sendable { // `pool` is guarded by `lock`; eve
     /// Displayed page sizes in points (crop box, after /Rotate).
     let pageSizes: [CGSize]
 
-    private let data: Data
+    /// The exact bytes this snapshot was made from.
+    let data: Data
     private let lock = NSLock()
     private var pool: [CGPDFDocument] = []
 
-    init(url: URL) throws {
-        let data = try Data(contentsOf: url)
+    convenience init(url: URL) throws {
+        try self.init(data: Data(contentsOf: url), url: url)
+    }
+
+    init(data: Data, url: URL) throws {
         guard let provider = CGDataProvider(data: data as CFData),
               let document = CGPDFDocument(provider)
         else { throw CocoaError(.fileReadCorruptFile, userInfo: [NSFilePathErrorKey: url.path]) }

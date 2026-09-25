@@ -20,6 +20,7 @@ public enum Action: String, CaseIterable, Sendable {
     case fitWidth = "fit_width"
     case fitPage = "fit_page"
     case toggleFrameHUD = "toggle_frame_hud"
+    case reload = "reload"
 
     /// Actions that scroll continuously while their key is held.
     public var isContinuous: Bool {
@@ -44,6 +45,7 @@ public enum KeyMap {
         "+": .zoomIn, "-": .zoomOut, "=": .zoomReset,
         "w": .fitWidth, "z": .fitPage,
         "g!": .toggleFrameHUD,
+        "r": .reload,
     ]
 
     /// Splits a binding like "g<C-d>" into tokens ["g", "<C-d>"].

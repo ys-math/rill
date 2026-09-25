@@ -22,8 +22,11 @@ enum DebugSnapshot {
                 try? await Task.sleep(for: .seconds(0.6))
                 log += "after \(step): origin=\(window.contentView.map { _ in document.debugOrigin } ?? .zero)\n"
             }
+            let delay = Double(env["RILL_SNAPSHOT_DELAY"] ?? "") ?? 1.0
+            try? await Task.sleep(for: .seconds(delay))
+            let state = document.currentState()
+            log += "final: pages=\(document.source.pageCount) page=\(state.position.page) offset=\(state.position.offset)\n"
             try? log.write(toFile: path + ".txt", atomically: true, encoding: .utf8)
-            try? await Task.sleep(for: .seconds(1.0))
             write(window: window, to: URL(fileURLWithPath: path))
             NSApp.terminate(nil)
         }
