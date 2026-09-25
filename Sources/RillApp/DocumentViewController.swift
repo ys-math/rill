@@ -27,11 +27,16 @@ final class DocumentViewController: NSViewController {
     /// `r` was pressed.
     var onReloadRequested: (() -> Void)?
 
+    private let syncIndex: SyncIndex
+    /// A forward-search target waiting for the first layout or an in-flight reload.
+    private var pendingReveal: [SyncTeXBox]?
+
     init(source: PDFSource, state: DocumentState?) {
         self.source = source
         self.layout = PageLayout(pageSizes: source.pageSizes)
         self.documentView = DocumentView(source: source, layout: layout)
         self.initialState = state
+        self.syncIndex = SyncIndex(pdfPath: source.url.path)
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -85,6 +90,63 @@ final class DocumentViewController: NSViewController {
         scrollView.contentView.scroll(to: placement.origin)
         scrollView.reflectScrolledClipView(scrollView.contentView)
         refresh(settled: true)
+        wireDocumentView()
+        if let boxes = pendingReveal { reveal(boxes) }
+    }
+
+    // MARK: - SyncTeX
+
+    /// Forward search. Returns an error message, or nil on success.
+    func forwardSearch(_ location: SourceLocation) async -> String? {
+        let boxes = await syncIndex.boxes(for: location)
+        guard !boxes.isEmpty else {
+            return await syncIndex.hasData
+                ? "no match for \((location.file as NSString).lastPathComponent):\(location.line)"
+                : "no SyncTeX data next to \(source.url.lastPathComponent) (compile with -synctex=1)"
+        }
+        reveal(boxes)
+        return nil
+    }
+
+    /// Scrolls the boxes into view (only if they aren't comfortably visible already) and flashes them.
+    private func reveal(_ boxes: [SyncTeXBox]) {
+        guard didInitialLayout, pendingReload == nil, let first = boxes.first, first.page < layout.pageCount else {
+            pendingReveal = boxes
+            return
+        }
+        pendingReveal = nil
+        let page = layout.pageFrames[first.page]
+        let target = boxes.map(\.rect).reduce(first.rect) { $0.union($1) }.offsetBy(dx: page.minX, dy: page.minY)
+        let visible = CGRect(origin: motion.origin, size: motion.viewport)
+        let comfortable = visible.insetBy(dx: 0, dy: visible.height * 0.1)
+        let scrolls = !comfortable.contains(CGPoint(x: target.midX, y: target.minY))
+            || !comfortable.contains(CGPoint(x: target.midX, y: target.maxY))
+        syncLog.debug("reveal page \(first.page + 1) box \(String(describing: first.rect), privacy: .public) (\(boxes.count) boxes) viewport y \(Int(visible.minY))–\(Int(visible.maxY)) target y \(Int(target.minY))–\(Int(target.maxY)) scroll \(scrolls)")
+        if scrolls {
+            // Put the line a third of the way down: context above, room below.
+            documentView.ensureThumbnails(first.page...first.page + 1)
+            motion.jump(toY: target.minY - visible.height / 3)
+        }
+        documentView.flash(target)
+    }
+
+    private func inverseSearch(at point: CGPoint) {
+        let index = layout.pageIndex(atY: point.y)
+        let frame = layout.pageFrames[index]
+        guard frame.contains(point) else { return }
+        let syncIndex = syncIndex
+        Task {
+            guard let location = await syncIndex.location(page: index, x: point.x - frame.minX, y: point.y - frame.minY) else {
+                syncLog.notice("inverse search: no source for page \(index + 1)")
+                NSSound.beep()
+                return
+            }
+            InverseSearch.open(location)
+        }
+    }
+
+    private func wireDocumentView() {
+        documentView.onCommandClick = { [weak self] in self?.inverseSearch(at: $0) }
     }
 
     // MARK: - State and reload
@@ -145,6 +207,8 @@ final class DocumentViewController: NSViewController {
         scrollView.reflectScrolledClipView(scrollView.contentView)
         CATransaction.commit()
         refresh(settled: true)
+        wireDocumentView()
+        if let boxes = pendingReveal { reveal(boxes) }
         reloadLog.debug("swapped in \((ContinuousClock.now - noticed).formatted(.units(allowed: [.milliseconds])), privacy: .public) after the change")
     }
 

@@ -103,6 +103,41 @@ final class DocumentView: NSView {
         if missing.isEmpty { completion() } else { readiness = (missing, completion) }
     }
 
+    /// ⌘-click: a point in document coordinates.
+    var onCommandClick: ((CGPoint) -> Void)?
+
+    override func mouseDown(with event: NSEvent) {
+        if event.modifierFlags.contains(.command) {
+            onCommandClick?(convert(event.locationInWindow, from: nil))
+        } else {
+            super.mouseDown(with: event)
+        }
+    }
+
+    /// Briefly highlights `rect` (document coordinates): the forward-search target.
+    func flash(_ rect: CGRect) {
+        let highlight = CALayer()
+        highlight.frame = rect.insetBy(dx: -3, dy: -2)
+        highlight.cornerRadius = 3
+        highlight.backgroundColor = NSColor.systemYellow.withAlphaComponent(0.4).cgColor
+        highlight.zPosition = 10
+        highlight.actions = ["position": NSNull(), "bounds": NSNull()]
+        layer?.addSublayer(highlight)
+
+        let fade = CABasicAnimation(keyPath: "opacity")
+        fade.fromValue = 1
+        fade.toValue = 0
+        fade.beginTime = CACurrentMediaTime() + 0.25
+        fade.duration = 0.8
+        fade.timingFunction = CAMediaTimingFunction(name: .easeIn)
+        fade.fillMode = .backwards
+        CATransaction.begin()
+        CATransaction.setCompletionBlock { highlight.removeFromSuperlayer() }
+        highlight.opacity = 0
+        highlight.add(fade, forKey: "fade")
+        CATransaction.commit()
+    }
+
     /// Stops all rendering. Call before discarding the view.
     func teardown() {
         readiness = nil

@@ -1,5 +1,5 @@
 /// A source location handed to rill by vimtex for forward search (`@line:@col:@tex`).
-public struct SourceLocation: Equatable, Sendable {
+public struct SourceLocation: Codable, Equatable, Sendable {
     public var line: Int
     public var column: Int
     public var file: String
@@ -16,7 +16,7 @@ public enum CLICommand: Equatable, Sendable {
     case help
     case version
     case open(pdf: String)
-    case forward(SourceLocation, pdf: String)
+    case forward(SourceLocation, pdf: String, activate: Bool)
 }
 
 public enum CLIParseError: Error, Equatable, CustomStringConvertible {
@@ -40,13 +40,16 @@ public enum CLIParseError: Error, Equatable, CustomStringConvertible {
 extension CLICommand {
     public static let usage = """
         usage: rill FILE.pdf
-               rill --forward LINE:COL:TEX FILE.pdf
+               rill [--activate] --forward LINE:COL:TEX FILE.pdf
                rill --version | --help
         """
 
     /// Parses arguments, excluding the program name.
     public static func parse(_ args: [String]) throws(CLIParseError) -> CLICommand {
         var args = args[...]
+        // `--activate` may appear anywhere; it only affects forward search.
+        let activate = args.contains("--activate")
+        args.removeAll { $0 == "--activate" }
         guard let first = args.popFirst() else { return .help }
 
         switch first {
@@ -59,7 +62,7 @@ extension CLICommand {
             let location = try parseLocation(spec)
             guard let pdf = args.popFirst() else { throw .missingPDF }
             if let extra = args.first { throw .unexpectedArgument(extra) }
-            return .forward(location, pdf: pdf)
+            return .forward(location, pdf: pdf, activate: activate)
         case let option where option.hasPrefix("-"):
             throw .unknownOption(option)
         default:
