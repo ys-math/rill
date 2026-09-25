@@ -31,12 +31,20 @@ final class DocumentViewController: NSViewController {
     /// A forward-search target waiting for the first layout or an in-flight reload.
     private var pendingReveal: [SyncTeXBox]?
 
+    private let search = SearchController()
+    private let hints = HintController()
+    private var jumps = JumpList<PagePosition>(isSame: { a, b in a.page == b.page && abs(a.offset - b.offset) < 0.02 })
+    private var marks: [String: PagePosition]
+    /// PDFKit view of the version on screen, for search and hints. Built on first use.
+    private var textIndexCache: PDFTextIndex?
+
     init(source: PDFSource, state: DocumentState?) {
         self.source = source
         self.layout = PageLayout(pageSizes: source.pageSizes)
         self.documentView = DocumentView(source: source, layout: layout)
         self.initialState = state
         self.syncIndex = SyncIndex(pdfPath: source.url.path)
+        self.marks = state?.marks ?? [:]
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -48,20 +56,31 @@ final class DocumentViewController: NSViewController {
         scrollView.documentView = documentView
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         hud.translatesAutoresizingMaskIntoConstraints = false
-        container.addSubview(scrollView)
-        container.addSubview(hud)
+        hints.overlay.translatesAutoresizingMaskIntoConstraints = false
+        search.bar.translatesAutoresizingMaskIntoConstraints = false
+        for subview in [scrollView, hints.overlay, search.bar, hud] { container.addSubview(subview) }
         NSLayoutConstraint.activate([
             scrollView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: container.trailingAnchor),
             scrollView.topAnchor.constraint(equalTo: container.topAnchor),
             scrollView.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            hints.overlay.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            hints.overlay.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            hints.overlay.topAnchor.constraint(equalTo: container.topAnchor),
+            hints.overlay.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            search.bar.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 12),
+            search.bar.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -12),
+            search.bar.widthAnchor.constraint(equalToConstant: 360),
             hud.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -12),
             hud.topAnchor.constraint(equalTo: container.topAnchor, constant: 36),
         ])
         view = container
+        search.host = self
+        hints.host = self
 
         scrollView.onUserScroll = { [weak self] in
             self?.motion.stop()
+            self?.hints.cancel()
             self?.zoomMode = .custom
         }
         motion.onFrame = { [weak self] settled in self?.refresh(settled: settled) }
@@ -115,19 +134,27 @@ final class DocumentViewController: NSViewController {
             return
         }
         pendingReveal = nil
-        let page = layout.pageFrames[first.page]
-        let target = boxes.map(\.rect).reduce(first.rect) { $0.union($1) }.offsetBy(dx: page.minX, dy: page.minY)
+        let rect = boxes.map(\.rect).reduce(first.rect) { $0.union($1) }
+        let scrolled = reveal(rect, onPage: first.page, recordingJump: true)
+        syncLog.debug("reveal page \(first.page + 1) box \(String(describing: first.rect), privacy: .public) (\(boxes.count) boxes) scroll \(scrolled)")
+        documentView.flash(rect.offsetBy(dx: layout.pageFrames[first.page].minX, dy: layout.pageFrames[first.page].minY))
+    }
+
+    /// Scrolls `rect` (display coordinates on `page`) into view unless it's already comfortably
+    /// visible, putting it a third of the way down: context above, room below. Returns whether it scrolled.
+    @discardableResult
+    private func reveal(_ rect: CGRect, onPage page: Int, recordingJump: Bool) -> Bool {
+        let frame = layout.pageFrames[page]
+        let target = rect.offsetBy(dx: frame.minX, dy: frame.minY)
         let visible = CGRect(origin: motion.origin, size: motion.viewport)
         let comfortable = visible.insetBy(dx: 0, dy: visible.height * 0.1)
-        let scrolls = !comfortable.contains(CGPoint(x: target.midX, y: target.minY))
-            || !comfortable.contains(CGPoint(x: target.midX, y: target.maxY))
-        syncLog.debug("reveal page \(first.page + 1) box \(String(describing: first.rect), privacy: .public) (\(boxes.count) boxes) viewport y \(Int(visible.minY))–\(Int(visible.maxY)) target y \(Int(target.minY))–\(Int(target.maxY)) scroll \(scrolls)")
-        if scrolls {
-            // Put the line a third of the way down: context above, room below.
-            documentView.ensureThumbnails(first.page...first.page + 1)
-            motion.jump(toY: target.minY - visible.height / 3)
-        }
-        documentView.flash(target)
+        let inView = comfortable.contains(CGPoint(x: target.midX, y: target.minY))
+            && comfortable.contains(CGPoint(x: target.midX, y: target.maxY))
+        guard !inView else { return false }
+        if recordingJump { jumps.record(currentPosition()) }
+        documentView.ensureThumbnails(page...page + 1)
+        motion.jump(toY: target.minY - visible.height / 3)
+        return true
     }
 
     private func inverseSearch(at point: CGPoint) {
@@ -158,7 +185,8 @@ final class DocumentViewController: NSViewController {
         case .fitPage: .fitPage
         case .custom: .magnification(Double(scrollView.magnification))
         }
-        return DocumentState(position: layout.position(atY: motion.origin.y), x: Double(motion.origin.x), zoom: zoom)
+        return DocumentState(position: layout.position(atY: motion.origin.y), x: Double(motion.origin.x), zoom: zoom,
+                             marks: marks)
     }
 
     /// Shows a new version of the document at the same place. The new version renders
@@ -208,6 +236,9 @@ final class DocumentViewController: NSViewController {
         CATransaction.commit()
         refresh(settled: true)
         wireDocumentView()
+        textIndexCache = nil
+        hints.cancel()
+        search.documentChanged()
         if let boxes = pendingReveal { reveal(boxes) }
         reloadLog.debug("swapped in \((ContinuousClock.now - noticed).formatted(.units(allowed: [.milliseconds])), privacy: .public) after the change")
     }
@@ -249,6 +280,7 @@ final class DocumentViewController: NSViewController {
     /// Returns false for keys rill doesn't handle, so they continue up the responder chain.
     func handleKeyDown(_ event: NSEvent) -> Bool {
         guard let token = event.keyToken else { return false }
+        if hints.isActive { return hints.feed(token) }
         // Auto-repeat of a held motion key is handled by continuous scrolling; others repeat normally.
         if event.isARepeat, continuousKey == event.keyCode { return true }
         switch resolver.feed(token) {
@@ -256,6 +288,12 @@ final class DocumentViewController: NSViewController {
             return true
         case .unbound:
             return token == "<Esc>"
+        case .escape:
+            perform(.clearHighlights, count: nil)
+            return true
+        case .actionWithArgument(let action, let argument, let count):
+            perform(action, count: count, argument: argument)
+            return true
         case .action(let action, let count):
             if action.isContinuous, count == nil, !event.isARepeat {
                 beginContinuous(action, keyCode: event.keyCode)
@@ -266,13 +304,34 @@ final class DocumentViewController: NSViewController {
         }
     }
 
-    var debugOrigin: CGPoint { motion.origin }
+    /// One line of state for the debug snapshot log.
+    var debugStatus: String {
+        let p = currentPosition()
+        return "page=\(p.page + 1) offset=\(String(format: "%.3f", p.offset)) x=\(Int(motion.origin.x)) "
+            + "hints=\(hints.debugCount) search=\(search.debugStatus) marks=\(marks.keys.sorted().joined()) jumps=\(jumps.count) "
+            + "pasteboard=\(NSPasteboard.general.string(forType: .string)?.prefix(30) ?? "")"
+    }
 
     /// Feeds a key sequence as if typed, without continuous scrolling. For debugging and tests.
     func feed(keys sequence: String) {
         for token in KeyMap.tokens(of: sequence) {
-            if case .action(let action, let count) = resolver.feed(token) { perform(action, count: count) }
+            if hints.isActive { _ = hints.feed(token); continue }
+            switch resolver.feed(token) {
+            case .action(let action, let count): perform(action, count: count)
+            case .actionWithArgument(let action, let argument, let count): perform(action, count: count, argument: argument)
+            case .escape: perform(.clearHighlights, count: nil)
+            case .pending, .unbound: break
+            }
         }
+    }
+
+    /// `Esc`. AppKit delivers it as the `cancelOperation:` command instead of a key press.
+    func handleEscape() {
+        if hints.isActive {
+            hints.cancel()
+            return
+        }
+        if case .escape = resolver.feed("<Esc>") { perform(.clearHighlights, count: nil) }
     }
 
     func handleKeyUp(_ event: NSEvent) {
@@ -294,7 +353,7 @@ final class DocumentViewController: NSViewController {
 
     // MARK: - Actions
 
-    func perform(_ action: Action, count: Int?) {
+    func perform(_ action: Action, count: Int?, argument: KeyToken? = nil) {
         let n = CGFloat(count ?? 1)
         let viewport = motion.viewport
         switch action {
@@ -312,8 +371,8 @@ final class DocumentViewController: NSViewController {
             let current = pageAtTop()
             let atTop = motion.origin.y <= layout.topOffset(ofPage: current) + 2
             jump(toPage: current - (atTop ? Int(n) : Int(n) - 1))
-        case .firstPage: jump(toPage: (count ?? 1) - 1)
-        case .goToPage: jump(toPage: count.map { $0 - 1 } ?? layout.pageCount - 1)
+        case .firstPage: jump(toPage: (count ?? 1) - 1, recordingJump: true)
+        case .goToPage: jump(toPage: count.map { $0 - 1 } ?? layout.pageCount - 1, recordingJump: true)
         case .zoomIn: zoom(to: scrollView.magnification * pow(1.25, n))
         case .zoomOut: zoom(to: scrollView.magnification / pow(1.25, n))
         case .zoomReset: zoom(to: 1)
@@ -321,6 +380,25 @@ final class DocumentViewController: NSViewController {
         case .fitPage: fitPage()
         case .toggleFrameHUD: hud.toggle()
         case .reload: onReloadRequested?()
+        case .jumpBack:
+            for _ in 0..<Int(n) { if let p = jumps.back(from: currentPosition()) { go(to: p) } else { NSSound.beep(); break } }
+        case .jumpForward:
+            for _ in 0..<Int(n) { if let p = jumps.forward() { go(to: p) } else { NSSound.beep(); break } }
+        case .setMark:
+            if let name = argument, name != "'" { marks[name] = currentPosition() } else { NSSound.beep() }
+        case .goToMark:
+            let target = argument == "'" ? jumps.lastJumpOrigin : argument.flatMap { marks[$0] }
+            guard let target else { return NSSound.beep() }
+            jumps.record(currentPosition())
+            go(to: target)
+        case .searchForward: search.begin(forward: true)
+        case .searchBackward: search.begin(forward: false)
+        case .searchNext: search.next(Int(n))
+        case .searchPrevious: search.next(-Int(n))
+        case .clearHighlights: search.clearHighlights()
+        case .hintFollowLink: hints.begin(.followLink)
+        case .hintInverseSearch: hints.begin(.inverseSearch)
+        case .hintYankLine: hints.begin(.yankLine)
         }
     }
 
@@ -334,12 +412,24 @@ final class DocumentViewController: NSViewController {
         layout.pageIndex(atY: motion.origin.y + layout.gap)
     }
 
-    private func jump(toPage index: Int) {
+    private func jump(toPage index: Int, recordingJump: Bool = false) {
+        if recordingJump { jumps.record(currentPosition()) }
         let page = min(max(index, 0), layout.pageCount - 1)
         let y = layout.topOffset(ofPage: page)
         let pagesInView = max(Int((motion.viewport.height / (layout.pageFrames[page].height + layout.gap)).rounded(.up)), 1)
         documentView.ensureThumbnails(page...(page + pagesInView))
         motion.jump(toY: y)
+    }
+
+    func currentPosition() -> PagePosition {
+        layout.position(atY: motion.origin.y)
+    }
+
+    /// Scroll to a remembered position (marks, jump list).
+    private func go(to position: PagePosition) {
+        let page = min(max(position.page, 0), layout.pageCount - 1)
+        documentView.ensureThumbnails(page...page + 1)
+        motion.jump(toY: layout.y(for: position))
     }
 
     private func zoom(to magnification: CGFloat) {
@@ -378,6 +468,7 @@ final class DocumentViewController: NSViewController {
 
     private func viewportDidResize() {
         guard didInitialLayout else { return }
+        hints.cancel()
         switch zoomMode {
         case .fitWidth: fitWidth(animated: false)
         case .fitPage, .custom: refresh(settled: true)
@@ -387,5 +478,96 @@ final class DocumentViewController: NSViewController {
     private func refresh(settled: Bool) {
         documentView.updateContent(visible: scrollView.contentView.bounds, magnification: scrollView.magnification,
                                    backingScale: backingScale, settled: settled)
+    }
+}
+
+// MARK: - Search and hints
+
+extension DocumentViewController: SearchHost, HintHost {
+    func textIndex() -> PDFTextIndex? {
+        if textIndexCache == nil { textIndexCache = PDFTextIndex(data: source.data) }
+        return textIndexCache
+    }
+
+    func searchAnchor() -> (page: Int, y: CGFloat) {
+        let y = motion.origin.y
+        let page = layout.pageIndex(atY: y)
+        return (page, y - layout.pageFrames[page].minY)
+    }
+
+    func show(_ match: SearchMatch) {
+        guard match.page < layout.pageCount else { return }
+        reveal(match.rect, onPage: match.page, recordingJump: false)
+    }
+
+    func highlight(_ matches: [SearchMatch], current: Int?) {
+        documentView.setHighlights(matches, current: current)
+    }
+
+    func recordJump(from position: PagePosition) {
+        jumps.record(position)
+    }
+
+    func restorePosition(_ position: PagePosition) {
+        go(to: position)
+    }
+
+    func endEditing() {
+        view.window?.makeFirstResponder(nil)
+    }
+
+    func visibleRegions() -> [Int: CGRect] {
+        let visible = CGRect(origin: motion.origin, size: motion.viewport)
+        guard let pages = layout.pages(inYRange: visible.minY, visible.maxY) else { return [:] }
+        var regions: [Int: CGRect] = [:]
+        for index in pages {
+            let frame = layout.pageFrames[index]
+            let part = visible.intersection(frame)
+            if !part.isNull { regions[index] = part.offsetBy(dx: -frame.minX, dy: -frame.minY) }
+        }
+        return regions
+    }
+
+    func overlayPoint(page: Int, point: CGPoint) -> CGPoint {
+        let frame = layout.pageFrames[page]
+        let documentPoint = CGPoint(x: frame.minX + point.x, y: frame.minY + point.y)
+        return hints.overlay.convert(documentPoint, from: documentView)
+    }
+
+    func hintChosen(_ target: HintTarget, kind: HintKind) {
+        let frame = layout.pageFrames[target.page]
+        switch (kind, target) {
+        case (.followLink, .link(let link)):
+            switch link.destination {
+            case .url(let url):
+                NSWorkspace.shared.open(url)
+            case .page(let index, let point):
+                guard index < layout.pageCount else { return NSSound.beep() }
+                jumps.record(currentPosition())
+                if let point {
+                    // A little context above the destination (usually a heading or equation).
+                    let top = layout.pageFrames[index].minY + point.y - motion.viewport.height * 0.05
+                    documentView.ensureThumbnails(index...index + 1)
+                    motion.jump(toY: top)
+                } else {
+                    jump(toPage: index)
+                }
+            }
+        case (.inverseSearch, .line(let line)):
+            documentView.flash(line.rect.offsetBy(dx: frame.minX, dy: frame.minY))
+            let syncIndex = syncIndex
+            Task {
+                guard let location = await syncIndex.location(page: line.page, x: line.rect.midX, y: line.rect.midY) else {
+                    return NSSound.beep()
+                }
+                InverseSearch.open(location)
+            }
+        case (.yankLine, .line(let line)):
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(line.text, forType: .string)
+            documentView.flash(line.rect.offsetBy(dx: frame.minX, dy: frame.minY))
+        default:
+            break
+        }
     }
 }
