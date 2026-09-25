@@ -38,6 +38,7 @@ public typealias KeyToken = String
 public enum KeyMap {
     public static let defaults: [KeyToken: Action] = [
         "j": .scrollDown, "k": .scrollUp, "h": .scrollLeft, "l": .scrollRight,
+        "<Down>": .scrollDown, "<Up>": .scrollUp, "<Left>": .scrollLeft, "<Right>": .scrollRight,
         "d": .halfPageDown, "u": .halfPageUp, "<C-d>": .halfPageDown, "<C-u>": .halfPageUp,
         "<Space>": .screenDown, "<S-Space>": .screenUp,
         "J": .pageNext, "K": .pagePrev,

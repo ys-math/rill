@@ -14,7 +14,9 @@ enum DebugSnapshot {
             try? await Task.sleep(for: .seconds(0.8))
             var log = "active=\(NSApp.isActive) key=\(window.isKeyWindow) firstResponder=\(String(describing: window.firstResponder))\n"
             for step in steps {
-                if env["RILL_SNAPSHOT_REAL_EVENTS"] != nil {
+                if env["RILL_SNAPSHOT_REAL_EVENTS"] != nil, let arrow = arrowKeys[step] {
+                    postKey(code: arrow.code, characters: arrow.characters, shift: false, window: window)
+                } else if env["RILL_SNAPSHOT_REAL_EVENTS"] != nil {
                     for character in step { postKey(character, window: window) }
                 } else {
                     document.feed(keys: step)
@@ -32,16 +34,26 @@ enum DebugSnapshot {
         }
     }
 
+    private static let arrowKeys: [String: (code: UInt16, characters: String)] = [
+        "<Left>": (123, "\u{F702}"), "<Right>": (124, "\u{F703}"), "<Down>": (125, "\u{F701}"), "<Up>": (126, "\u{F700}"),
+    ]
+
     /// Posts a real key down/up pair through the app's event queue, exercising the responder chain.
     private static func postKey(_ character: Character, window: NSWindow) {
         let keyCodes: [Character: UInt16] = ["j": 38, "k": 40, "d": 2, "u": 32, "G": 5, "g": 5, "+": 24, "-": 27, "w": 13, "z": 6]
-        let code = keyCodes[character] ?? 0
-        let shift = character.isUppercase || character == "+"
+        postKey(code: keyCodes[character] ?? 0, characters: String(character),
+                shift: character.isUppercase || character == "+", window: window)
+    }
+
+    private static func postKey(code: UInt16, characters: String, shift: Bool, window: NSWindow) {
+        // Real arrow events carry these flags; include them so the test matches the keyboard.
+        var flags: NSEvent.ModifierFlags = shift ? [.shift] : []
+        if (123...126).contains(code) { flags.formUnion([.function, .numericPad]) }
         for type in [NSEvent.EventType.keyDown, .keyUp] {
             if let event = NSEvent.keyEvent(
-                with: type, location: .zero, modifierFlags: shift ? .shift : [], timestamp: ProcessInfo.processInfo.systemUptime,
-                windowNumber: window.windowNumber, context: nil, characters: String(character),
-                charactersIgnoringModifiers: String(character), isARepeat: false, keyCode: code) {
+                with: type, location: .zero, modifierFlags: flags, timestamp: ProcessInfo.processInfo.systemUptime,
+                windowNumber: window.windowNumber, context: nil, characters: characters,
+                charactersIgnoringModifiers: characters, isARepeat: false, keyCode: code) {
                 NSApp.postEvent(event, atStart: false)
             }
         }

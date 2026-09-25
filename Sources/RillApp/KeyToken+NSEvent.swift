@@ -7,6 +7,14 @@ extension NSEvent {
     var keyToken: KeyToken? {
         let flags = modifierFlags.intersection(.deviceIndependentFlagsMask)
         if flags.contains(.command) { return nil }
+        if let arrow = Self.arrowNames[keyCode] {
+            // Arrow events always carry the function/numeric-pad flags; only real modifiers count.
+            var prefix = ""
+            if flags.contains(.control) { prefix += "C-" }
+            if flags.contains(.option) { prefix += "M-" }
+            if flags.contains(.shift) { prefix += "S-" }
+            return "<\(prefix)\(arrow)>"
+        }
         switch keyCode {
         case 53: return "<Esc>"
         case 49: return flags.contains(.shift) ? "<S-Space>" : "<Space>"
@@ -23,4 +31,6 @@ extension NSEvent {
         else { return nil }
         return c
     }
+
+    private static let arrowNames: [UInt16: String] = [123: "Left", 124: "Right", 125: "Down", 126: "Up"]
 }
