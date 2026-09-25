@@ -66,6 +66,12 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate {
         }
     }
 
+    /// Forward search in this window's document. Returns an error message, or nil on success.
+    func forwardSearch(_ location: SourceLocation) async -> String? {
+        guard let documentController else { return "could not open \(url?.lastPathComponent ?? "document")" }
+        return await documentController.forwardSearch(location)
+    }
+
     /// Records where the document is scrolled to. The store is written to disk by the app delegate.
     func saveState() {
         guard let url, let documentController, documentController.isViewLoaded else { return }

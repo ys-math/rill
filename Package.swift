@@ -9,12 +9,18 @@ let package = Package(
         .executable(name: "rill", targets: ["rill"]),
     ],
     targets: [
-        // Shared, UI-free logic: CLI parsing, IPC messages, config. Everything testable lives here.
-        .target(name: "RillCore"),
+        // The official SyncTeX parser, vendored. See Sources/CSynctex/VENDORED.md.
+        .target(
+            name: "CSynctex",
+            cSettings: [.unsafeFlags(["-w"])], // third-party code; don't surface its warnings
+            linkerSettings: [.linkedLibrary("z")]
+        ),
+        // Shared, UI-free logic: CLI parsing, IPC, SyncTeX, config. Everything testable lives here.
+        .target(name: "RillCore", dependencies: ["CSynctex"]),
         // The AppKit application, bundled into Rill.app by the Makefile.
         .executableTarget(name: "RillApp", dependencies: ["RillCore"]),
         // The command-line client used by vimtex and the shell.
         .executableTarget(name: "rill", dependencies: ["RillCore"]),
-        .testTarget(name: "RillCoreTests", dependencies: ["RillCore"]),
+        .testTarget(name: "RillCoreTests", dependencies: ["RillCore"], resources: [.copy("Fixtures")]),
     ]
 )
