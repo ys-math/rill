@@ -64,6 +64,17 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate {
         window?.contentView = container
     }
 
+    // Nothing in the document view takes focus, so keys travel up the responder chain
+    // (window → window controller) and land here. Views that do want keys, like a future
+    // picker's text field, get them first.
+    override func keyDown(with event: NSEvent) {
+        if documentController?.handleKeyDown(event) != true { super.keyDown(with: event) }
+    }
+
+    override func keyUp(with event: NSEvent) {
+        documentController?.handleKeyUp(event)
+    }
+
     func windowWillClose(_ notification: Notification) {
         onClose?()
     }

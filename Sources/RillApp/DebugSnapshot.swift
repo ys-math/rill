@@ -12,13 +12,35 @@ enum DebugSnapshot {
 
         Task { @MainActor in
             try? await Task.sleep(for: .seconds(0.8))
+            var log = "active=\(NSApp.isActive) key=\(window.isKeyWindow) firstResponder=\(String(describing: window.firstResponder))\n"
             for step in steps {
-                document.feed(keys: step)
+                if env["RILL_SNAPSHOT_REAL_EVENTS"] != nil {
+                    for character in step { postKey(character, window: window) }
+                } else {
+                    document.feed(keys: step)
+                }
                 try? await Task.sleep(for: .seconds(0.6))
+                log += "after \(step): origin=\(window.contentView.map { _ in document.debugOrigin } ?? .zero)\n"
             }
+            try? log.write(toFile: path + ".txt", atomically: true, encoding: .utf8)
             try? await Task.sleep(for: .seconds(1.0))
             write(window: window, to: URL(fileURLWithPath: path))
             NSApp.terminate(nil)
+        }
+    }
+
+    /// Posts a real key down/up pair through the app's event queue, exercising the responder chain.
+    private static func postKey(_ character: Character, window: NSWindow) {
+        let keyCodes: [Character: UInt16] = ["j": 38, "k": 40, "d": 2, "u": 32, "G": 5, "g": 5, "+": 24, "-": 27, "w": 13, "z": 6]
+        let code = keyCodes[character] ?? 0
+        let shift = character.isUppercase || character == "+"
+        for type in [NSEvent.EventType.keyDown, .keyUp] {
+            if let event = NSEvent.keyEvent(
+                with: type, location: .zero, modifierFlags: shift ? .shift : [], timestamp: ProcessInfo.processInfo.systemUptime,
+                windowNumber: window.windowNumber, context: nil, characters: String(character),
+                charactersIgnoringModifiers: String(character), isARepeat: false, keyCode: code) {
+                NSApp.postEvent(event, atStart: false)
+            }
         }
     }
 

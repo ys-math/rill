@@ -45,8 +45,6 @@ final class DocumentViewController: NSViewController {
         ])
         view = container
 
-        scrollView.onKeyDown = { [weak self] in self?.handleKeyDown($0) ?? false }
-        scrollView.onKeyUp = { [weak self] in self?.handleKeyUp($0) }
         scrollView.onUserScroll = { [weak self] in
             self?.motion.stop()
             self?.zoomMode = .custom
@@ -78,7 +76,6 @@ final class DocumentViewController: NSViewController {
 
     override func viewDidAppear() {
         super.viewDidAppear()
-        view.window?.makeFirstResponder(scrollView)
         // A keyUp that lands in another window would otherwise leave continuous scrolling running.
         NotificationCenter.default.addObserver(forName: NSWindow.didResignKeyNotification, object: view.window, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated {
@@ -91,7 +88,8 @@ final class DocumentViewController: NSViewController {
 
     // MARK: - Keys
 
-    private func handleKeyDown(_ event: NSEvent) -> Bool {
+    /// Returns false for keys rill doesn't handle, so they continue up the responder chain.
+    func handleKeyDown(_ event: NSEvent) -> Bool {
         guard let token = event.keyToken else { return false }
         // Auto-repeat of a held motion key is handled by continuous scrolling; others repeat normally.
         if event.isARepeat, continuousKey == event.keyCode { return true }
@@ -110,6 +108,9 @@ final class DocumentViewController: NSViewController {
         }
     }
 
+    var debugOrigin: CGPoint { motion.origin }
+
+
     /// Feeds a key sequence as if typed, without continuous scrolling. For debugging and tests.
     func feed(keys sequence: String) {
         for token in KeyMap.tokens(of: sequence) {
@@ -117,7 +118,7 @@ final class DocumentViewController: NSViewController {
         }
     }
 
-    private func handleKeyUp(_ event: NSEvent) {
+    func handleKeyUp(_ event: NSEvent) {
         guard event.keyCode == continuousKey else { return }
         continuousKey = nil
         motion.endContinuous()

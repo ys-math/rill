@@ -1,10 +1,9 @@
 import AppKit
 
-/// Native scroll view (trackpad momentum, rubber-banding, pinch) that also takes keys.
+/// Native scroll view (trackpad momentum, rubber-banding, pinch). Keys are handled by the
+/// window controller, which sits behind the window in the responder chain.
 @MainActor
 final class DocumentScrollView: NSScrollView {
-    var onKeyDown: ((NSEvent) -> Bool)?
-    var onKeyUp: ((NSEvent) -> Void)?
     /// The user took over with the trackpad or mouse; programmatic motion should stop.
     var onUserScroll: (() -> Void)?
     /// True during a trackpad pinch. Tiles aren't re-rendered until it ends.
@@ -26,20 +25,12 @@ final class DocumentScrollView: NSScrollView {
                 ? NSColor(white: 0.11, alpha: 1) : NSColor(white: 0.90, alpha: 1)
         }
         contentView.postsBoundsChangedNotifications = true
+        // Pages run under the transparent title bar; no automatic inset for it.
+        automaticallyAdjustsContentInsets = false
     }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
-
-    override var acceptsFirstResponder: Bool { true }
-
-    override func keyDown(with event: NSEvent) {
-        if onKeyDown?(event) != true { super.keyDown(with: event) }
-    }
-
-    override func keyUp(with event: NSEvent) {
-        onKeyUp?(event)
-    }
 
     override func scrollWheel(with event: NSEvent) {
         onUserScroll?()
