@@ -15,7 +15,7 @@ final class DocumentViewController: NSViewController {
     private var documentView: DocumentView
     private let hud = FrameHUD(frame: .zero)
     private lazy var motion = Motion(scrollView: scrollView)
-    private var resolver = KeyResolver()
+    private var resolver = KeyResolver(keymap: ConfigStore.shared.config.keymap)
     private var zoomMode = ZoomMode.fitWidth
     /// keyCode of the key driving continuous scrolling, so its keyUp ends it.
     private var continuousKey: UInt16?
@@ -33,6 +33,11 @@ final class DocumentViewController: NSViewController {
 
     private let search = SearchController()
     private let toast = Toast()
+    private let pill = StatusPill()
+    private let cheatsheet = Cheatsheet()
+    /// `i` overrides the config's dark mode for this window.
+    private var darkOverride: Bool?
+    private var appearanceObservation: NSKeyValueObservation?
     private let hints = HintController()
     private var jumps = JumpList<PagePosition>(isSame: { a, b in a.page == b.page && abs(a.offset - b.offset) < 0.02 })
     private var marks: [String: PagePosition]
@@ -41,8 +46,8 @@ final class DocumentViewController: NSViewController {
 
     init(source: PDFSource, state: DocumentState?) {
         self.source = source
-        self.layout = PageLayout(pageSizes: source.pageSizes)
-        self.documentView = DocumentView(source: source, layout: layout)
+        self.layout = PageLayout(pageSizes: source.pageSizes, gap: CGFloat(ConfigStore.shared.config.pageGap))
+        self.documentView = DocumentView(source: source, layout: layout, dark: Self.wantsDark(override: nil))
         self.initialState = state
         self.syncIndex = SyncIndex(pdfPath: source.url.path)
         self.marks = state?.marks ?? [:]
@@ -60,7 +65,9 @@ final class DocumentViewController: NSViewController {
         hints.overlay.translatesAutoresizingMaskIntoConstraints = false
         search.bar.translatesAutoresizingMaskIntoConstraints = false
         toast.translatesAutoresizingMaskIntoConstraints = false
-        for subview in [scrollView, hints.overlay, search.bar, toast, hud] { container.addSubview(subview) }
+        pill.translatesAutoresizingMaskIntoConstraints = false
+        cheatsheet.translatesAutoresizingMaskIntoConstraints = false
+        for subview in [scrollView, hints.overlay, search.bar, toast, pill, cheatsheet, hud] { container.addSubview(subview) }
         NSLayoutConstraint.activate([
             scrollView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: container.trailingAnchor),
@@ -75,12 +82,17 @@ final class DocumentViewController: NSViewController {
             search.bar.widthAnchor.constraint(equalToConstant: 360),
             toast.centerXAnchor.constraint(equalTo: container.centerXAnchor),
             toast.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -16),
+            pill.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -12),
+            pill.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -12),
+            cheatsheet.centerXAnchor.constraint(equalTo: container.centerXAnchor),
+            cheatsheet.centerYAnchor.constraint(equalTo: container.centerYAnchor),
             hud.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -12),
             hud.topAnchor.constraint(equalTo: container.topAnchor, constant: 36),
         ])
         view = container
         search.host = self
         hints.host = self
+        hints.onActiveChange = { [weak self] active in self?.pill.mode = active ? "HINT" : nil }
 
         scrollView.onUserScroll = { [weak self] in
             self?.motion.stop()
@@ -100,13 +112,55 @@ final class DocumentViewController: NSViewController {
             MainActor.assumeIsolated { self?.viewportDidResize() }
         }
         scrollView.postsFrameChangedNotifications = true
+
+        center.addObserver(forName: .rillConfigDidChange, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.configDidChange() }
+        }
+        appearanceObservation = NSApp.observe(\.effectiveAppearance) { [weak self] _, _ in
+            DispatchQueue.main.async { MainActor.assumeIsolated { self?.appearanceDidChange() } }
+        }
+    }
+
+    // MARK: - Config and appearance
+
+    private static func wantsDark(override: Bool?) -> Bool {
+        if let override { return override }
+        switch ConfigStore.shared.config.darkMode {
+        case .on: return true
+        case .off: return false
+        case .system: return NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        }
+    }
+
+    private func configDidChange() {
+        let config = ConfigStore.shared.config
+        resolver = KeyResolver(keymap: config.keymap)
+        if layout.gap != CGFloat(config.pageGap) || documentView.dark != Self.wantsDark(override: darkOverride) {
+            rebuild()
+        }
+    }
+
+    private func appearanceDidChange() {
+        if documentView.dark != Self.wantsDark(override: darkOverride) { rebuild() }
+    }
+
+    /// Re-renders the same version with current settings (dark mode, page gap), swapping it in
+    /// the same way a reload does.
+    private func rebuild() {
+        replace(with: source)
+    }
+
+    /// Longer-lived than command feedback: these (config problems) need reading.
+    func showToast(_ message: String) {
+        toast.show(message, for: .seconds(5))
     }
 
     override func viewDidLayout() {
         super.viewDidLayout()
         guard !didInitialLayout, scrollView.bounds.width > 0 else { return }
         didInitialLayout = true
-        let state = initialState ?? DocumentState(position: PagePosition(page: 0, offset: 0), zoom: .fitWidth)
+        let state = initialState
+            ?? DocumentState(position: PagePosition(page: 0, offset: 0), zoom: ConfigStore.shared.config.defaultZoom)
         let placement = placement(of: state, in: layout)
         zoomMode = placement.mode
         scrollView.magnification = placement.magnification
@@ -198,8 +252,8 @@ final class DocumentViewController: NSViewController {
     /// ready (or after a short timeout, with thumbnails standing in).
     func replace(with newSource: PDFSource, noticed: ContinuousClock.Instant = .now) {
         cancelPendingReload()
-        let newLayout = PageLayout(pageSizes: newSource.pageSizes)
-        let newView = DocumentView(source: newSource, layout: newLayout)
+        let newLayout = PageLayout(pageSizes: newSource.pageSizes, gap: CGFloat(ConfigStore.shared.config.pageGap))
+        let newView = DocumentView(source: newSource, layout: newLayout, dark: Self.wantsDark(override: darkOverride))
         let target = placement(of: currentState(), in: newLayout)
         let visible = CGRect(origin: target.origin,
                              size: CGSize(width: scrollView.contentSize.width / target.magnification,
@@ -243,6 +297,7 @@ final class DocumentViewController: NSViewController {
         textIndexCache = nil
         hints.cancel()
         search.documentChanged()
+        pill.flash()
         if let boxes = pendingReveal { reveal(boxes) }
         reloadLog.debug("swapped in \((ContinuousClock.now - noticed).formatted(.units(allowed: [.milliseconds])), privacy: .public) after the change")
     }
@@ -284,10 +339,16 @@ final class DocumentViewController: NSViewController {
     /// Returns false for keys rill doesn't handle, so they continue up the responder chain.
     func handleKeyDown(_ event: NSEvent) -> Bool {
         guard let token = event.keyToken else { return false }
+        if cheatsheet.isShowing {
+            cheatsheet.hide()
+            return true
+        }
         if hints.isActive { return hints.feed(token) }
         // Auto-repeat of a held motion key is handled by continuous scrolling; others repeat normally.
         if event.isARepeat, continuousKey == event.keyCode { return true }
-        switch resolver.feed(token) {
+        let result = resolver.feed(token)
+        if case .pending(let display) = result { pill.pending = display } else { pill.pending = nil }
+        switch result {
         case .pending:
             return true
         case .unbound:
@@ -312,7 +373,8 @@ final class DocumentViewController: NSViewController {
     var debugStatus: String {
         let p = currentPosition()
         return "page=\(p.page + 1) offset=\(String(format: "%.3f", p.offset)) x=\(Int(motion.origin.x)) "
-            + "toast=\(toast.debugMessage.isEmpty ? "-" : toast.debugMessage) hints=\(hints.debugCount) search=\(search.debugStatus) marks=\(marks.keys.sorted().joined()) jumps=\(jumps.count) "
+            + "dark=\(documentView.dark) gap=\(Int(layout.gap)) pill=\(pill.debugText.isEmpty ? "-" : pill.debugText) "
+            + "cheatsheet=\(cheatsheet.isShowing) toast=\(toast.debugMessage.isEmpty ? "-" : toast.debugMessage) hints=\(hints.debugCount) search=\(search.debugStatus) marks=\(marks.keys.sorted().joined()) jumps=\(jumps.count) "
             + "pasteboard=\(NSPasteboard.general.string(forType: .string)?.prefix(30) ?? "")"
     }
 
@@ -331,6 +393,11 @@ final class DocumentViewController: NSViewController {
 
     /// `Esc`. AppKit delivers it as the `cancelOperation:` command instead of a key press.
     func handleEscape() {
+        pill.pending = nil
+        if cheatsheet.isShowing {
+            cheatsheet.hide()
+            return
+        }
         if hints.isActive {
             hints.cancel()
             return
@@ -360,6 +427,9 @@ final class DocumentViewController: NSViewController {
     func perform(_ action: Action, count: Int?, argument: KeyToken? = nil) {
         let n = CGFloat(count ?? 1)
         let viewport = motion.viewport
+        if action.category == .jump || action.category == .zoom, action != .toggleStatus, action != .toggleDarkMode, action != .setMark {
+            pill.flash()
+        }
         switch action {
         case .scrollDown: motion.scroll(by: n * smallStep(.vertical), axis: .vertical)
         case .scrollUp: motion.scroll(by: -n * smallStep(.vertical), axis: .vertical)
@@ -408,6 +478,15 @@ final class DocumentViewController: NSViewController {
         case .hintFollowLink: hints.begin(.followLink)
         case .hintInverseSearch: hints.begin(.inverseSearch)
         case .hintYankLine: hints.begin(.yankLine)
+        case .toggleDarkMode:
+            darkOverride = !documentView.dark
+            rebuild()
+            toast.show(darkOverride == true ? "dark mode" : "light mode")
+        case .toggleStatus:
+            pill.pinned.toggle()
+            if !pill.pinned { pill.flash() }
+        case .showCheatsheet: cheatsheet.show(keymap: ConfigStore.shared.config.keymap)
+        case .closeDocument: view.window?.performClose(nil)
         }
     }
 
@@ -485,6 +564,8 @@ final class DocumentViewController: NSViewController {
     }
 
     private func refresh(settled: Bool) {
+        pill.update(page: layout.pageIndex(atY: motion.origin.y + motion.viewport.height / 2) + 1,
+                    of: layout.pageCount, zoom: scrollView.magnification)
         documentView.updateContent(visible: scrollView.contentView.bounds, magnification: scrollView.magnification,
                                    backingScale: backingScale, settled: settled)
     }
