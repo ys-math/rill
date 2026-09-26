@@ -32,6 +32,7 @@ final class DocumentViewController: NSViewController {
     private var pendingReveal: [SyncTeXBox]?
 
     private let search = SearchController()
+    private let toast = Toast()
     private let hints = HintController()
     private var jumps = JumpList<PagePosition>(isSame: { a, b in a.page == b.page && abs(a.offset - b.offset) < 0.02 })
     private var marks: [String: PagePosition]
@@ -58,7 +59,8 @@ final class DocumentViewController: NSViewController {
         hud.translatesAutoresizingMaskIntoConstraints = false
         hints.overlay.translatesAutoresizingMaskIntoConstraints = false
         search.bar.translatesAutoresizingMaskIntoConstraints = false
-        for subview in [scrollView, hints.overlay, search.bar, hud] { container.addSubview(subview) }
+        toast.translatesAutoresizingMaskIntoConstraints = false
+        for subview in [scrollView, hints.overlay, search.bar, toast, hud] { container.addSubview(subview) }
         NSLayoutConstraint.activate([
             scrollView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: container.trailingAnchor),
@@ -71,6 +73,8 @@ final class DocumentViewController: NSViewController {
             search.bar.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 12),
             search.bar.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -12),
             search.bar.widthAnchor.constraint(equalToConstant: 360),
+            toast.centerXAnchor.constraint(equalTo: container.centerXAnchor),
+            toast.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -16),
             hud.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -12),
             hud.topAnchor.constraint(equalTo: container.topAnchor, constant: 36),
         ])
@@ -308,7 +312,7 @@ final class DocumentViewController: NSViewController {
     var debugStatus: String {
         let p = currentPosition()
         return "page=\(p.page + 1) offset=\(String(format: "%.3f", p.offset)) x=\(Int(motion.origin.x)) "
-            + "hints=\(hints.debugCount) search=\(search.debugStatus) marks=\(marks.keys.sorted().joined()) jumps=\(jumps.count) "
+            + "toast=\(toast.debugMessage.isEmpty ? "-" : toast.debugMessage) hints=\(hints.debugCount) search=\(search.debugStatus) marks=\(marks.keys.sorted().joined()) jumps=\(jumps.count) "
             + "pasteboard=\(NSPasteboard.general.string(forType: .string)?.prefix(30) ?? "")"
     }
 
@@ -385,10 +389,15 @@ final class DocumentViewController: NSViewController {
         case .jumpForward:
             for _ in 0..<Int(n) { if let p = jumps.forward() { go(to: p) } else { NSSound.beep(); break } }
         case .setMark:
-            if let name = argument, name != "'" { marks[name] = currentPosition() } else { NSSound.beep() }
+            guard let name = argument, name != "'" else { return NSSound.beep() }
+            marks[name] = currentPosition()
+            toast.show("mark \(name) set")
         case .goToMark:
             let target = argument == "'" ? jumps.lastJumpOrigin : argument.flatMap { marks[$0] }
-            guard let target else { return NSSound.beep() }
+            guard let target else {
+                toast.show(argument == "'" ? "no previous jump" : "no mark \(argument ?? "")")
+                return
+            }
             jumps.record(currentPosition())
             go(to: target)
         case .searchForward: search.begin(forward: true)
@@ -532,6 +541,10 @@ extension DocumentViewController: SearchHost, HintHost {
         let frame = layout.pageFrames[page]
         let documentPoint = CGPoint(x: frame.minX + point.x, y: frame.minY + point.y)
         return hints.overlay.convert(documentPoint, from: documentView)
+    }
+
+    func hintsUnavailable(_ kind: HintKind) {
+        toast.show(kind == .followLink ? "no links on screen" : "no text on screen")
     }
 
     func hintChosen(_ target: HintTarget, kind: HintKind) {

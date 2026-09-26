@@ -34,6 +34,8 @@ protocol HintHost: AnyObject {
     func visibleRegions() -> [Int: CGRect]
     /// A page point in the hint overlay's coordinates.
     func overlayPoint(page: Int, point: CGPoint) -> CGPoint
+    /// Nothing to label on screen.
+    func hintsUnavailable(_ kind: HintKind)
     func hintChosen(_ target: HintTarget, kind: HintKind)
 }
 
@@ -62,8 +64,8 @@ final class HintController {
             }
             guard let self, self.isActive, !Task.isCancelled else { return }
             guard !targets.isEmpty else {
-                NSSound.beep()
                 self.cancel()
+                self.host?.hintsUnavailable(kind)
                 return
             }
             let labels = HintLabels.make(targets.count)
