@@ -4,7 +4,6 @@ import AppKit
 /// otherwise have no visible effect ("mark a set", "no links on screen").
 @MainActor
 final class Toast: NSView {
-    private static let visibleFor: Duration = .milliseconds(1400)
 
     private let label = Overlay.label()
     private var hideTask: Task<Void, Never>?
@@ -33,12 +32,12 @@ final class Toast: NSView {
 
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
-    func show(_ message: String) {
+    func show(_ message: String, for duration: Duration = .milliseconds(1400)) {
         label.stringValue = message
         Overlay.show(self)
         hideTask?.cancel()
         hideTask = Task { [weak self] in
-            try? await Task.sleep(for: Self.visibleFor)
+            try? await Task.sleep(for: duration)
             guard !Task.isCancelled, let self else { return }
             Overlay.hide(self)
         }

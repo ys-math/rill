@@ -10,7 +10,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.mainMenu = MainMenu.make()
+        ConfigStore.shared.onProblem = { [weak self] message in self?.showProblem(message) }
         startServer()
+    }
+
+    /// Config problems go to the frontmost document; with none open, to the next one that opens.
+    private var pendingProblem: String?
+
+    private func showProblem(_ message: String) {
+        if let front = windows.first(where: { $0.window?.isKeyWindow == true }) ?? windows.first, front.showToast(message) {
+            return
+        }
+        pendingProblem = message
     }
 
     func application(_ application: NSApplication, open urls: [URL]) {
@@ -59,6 +70,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } else if isNew || controller.window?.isMiniaturized == true {
             controller.window?.orderFrontRegardless()
         }
+        if let problem = pendingProblem, controller.showToast(problem) { pendingProblem = nil }
         return controller
     }
 
@@ -98,7 +110,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             respond(.success)
         case .forward:
             guard let source = request.source else { return respond(.failure("forward search needs a source location")) }
-            let controller = window(for: url, activate: request.activate || SyncSettings.current.activateOnForward)
+            let controller = window(for: url, activate: request.activate || ConfigStore.shared.config.activateOnForward)
             Task {
                 let error = await controller.forwardSearch(source)
                 respond(error.map(IPCResponse.failure) ?? .success)

@@ -16,24 +16,27 @@ final class DocumentView: NSView {
 
     let source: PDFSource
     let layout: PageLayout
+    /// Pages are recoloured as dark paper.
+    let dark: Bool
 
     private var pages: [PageLayer] = []
     private var tiles: [TileKey: CALayer] = [:]
-    private lazy var scheduler = RenderScheduler(source: source) { [weak self] request, image in
+    private lazy var scheduler = RenderScheduler(source: source, dark: dark) { [weak self] request, image in
         self?.install(request, image)
     }
     private var currentLevel = 0
     /// Tiles still missing before `prepare`'s completion fires.
     private var readiness: (missing: Set<TileKey>, completion: () -> Void)?
 
-    init(source: PDFSource, layout: PageLayout) {
+    init(source: PDFSource, layout: PageLayout, dark: Bool) {
         self.source = source
         self.layout = layout
+        self.dark = dark
         super.init(frame: CGRect(origin: .zero, size: layout.size))
         wantsLayer = true
         layerContentsRedrawPolicy = .never
         for frame in layout.pageFrames {
-            let page = PageLayer(frame: frame)
+            let page = PageLayer(frame: frame, paper: dark ? PaperRecolor.paperColor : .white)
             layer!.addSublayer(page)
             pages.append(page)
         }
@@ -242,10 +245,10 @@ private final class PageLayer: CALayer {
     let content = CALayer()
     private(set) var hasThumbnail = false
 
-    init(frame: CGRect) {
+    init(frame: CGRect, paper: CGColor) {
         super.init()
         self.frame = frame
-        backgroundColor = .white
+        backgroundColor = paper
         shadowColor = .black
         shadowOpacity = 0.18
         shadowRadius = 3

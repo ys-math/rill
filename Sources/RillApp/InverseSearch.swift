@@ -4,17 +4,6 @@ import RillCore
 
 let syncLog = Logger(subsystem: "io.github.ys-math.rill", category: "synctex")
 
-/// SyncTeX settings. Hard-coded defaults until the config file lands (milestone 6).
-struct SyncSettings {
-    var inverseCommand = InverseSearchCommand.vimtexDefault
-    /// App brought to the front after inverse search (your terminal running Neovim).
-    var activateOnInverse: String? = "com.mitchellh.ghostty"
-    /// Whether forward search brings rill to the front (the CLI's --activate also does).
-    var activateOnForward = false
-
-    static let current = SyncSettings()
-}
-
 @MainActor
 enum InverseSearch {
     /// Apps launched from Finder get a minimal PATH; add the usual places nvim lives.
@@ -22,10 +11,10 @@ enum InverseSearch {
                                     "/Library/TeX/texbin"]
 
     /// Runs the inverse-search command for `location`, then activates the editor's terminal.
-    static func open(_ location: SourceLocation, settings: SyncSettings = .current) {
+    static func open(_ location: SourceLocation, config: Config = ConfigStore.shared.config) {
         let command: String
         do {
-            command = try settings.inverseCommand.render(location)
+            command = try config.inverseCommand.render(location)
         } catch {
             syncLog.error("inverse search: refusing unsafe path \(location.file, privacy: .public)")
             NSSound.beep()
@@ -54,7 +43,7 @@ enum InverseSearch {
             return
         }
 
-        if let bundleID = settings.activateOnInverse,
+        if let bundleID = config.activateOnInverse,
            let app = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first {
             app.activate()
         }

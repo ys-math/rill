@@ -22,7 +22,7 @@ final class DocumentScrollView: NSScrollView {
         drawsBackground = true
         backgroundColor = NSColor(name: nil) { appearance in
             appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-                ? NSColor(white: 0.11, alpha: 1) : NSColor(white: 0.90, alpha: 1)
+                ? NSColor(white: 0.06, alpha: 1) : NSColor(white: 0.90, alpha: 1)
         }
         contentView.postsBoundsChangedNotifications = true
         // Pages run under the transparent title bar; no automatic inset for it.

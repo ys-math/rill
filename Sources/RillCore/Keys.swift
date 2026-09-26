@@ -36,6 +36,10 @@ public enum Action: String, CaseIterable, Sendable {
     case hintFollowLink = "hint_follow_link"
     case hintInverseSearch = "hint_inverse_search"
     case hintYankLine = "hint_yank_line"
+    case toggleDarkMode = "toggle_dark_mode"
+    case toggleStatus = "toggle_status"
+    case showCheatsheet = "show_cheatsheet"
+    case closeDocument = "close_document"
 
     /// Actions followed by one more key that names their target, like `m` + `a`.
     public var takesArgument: Bool {
@@ -47,6 +51,75 @@ public enum Action: String, CaseIterable, Sendable {
         switch self {
         case .scrollDown, .scrollUp, .scrollLeft, .scrollRight: true
         default: false
+        }
+    }
+}
+
+extension Action {
+    public enum Category: String, CaseIterable, Sendable {
+        case scroll = "Scroll"
+        case jump = "Jump"
+        case zoom = "Zoom & view"
+        case search = "Search"
+        case hints = "Hints"
+        case other = "Other"
+    }
+
+    public var category: Category {
+        switch self {
+        case .scrollDown, .scrollUp, .scrollLeft, .scrollRight, .halfPageDown, .halfPageUp, .screenDown, .screenUp:
+            .scroll
+        case .pageNext, .pagePrev, .firstPage, .goToPage, .jumpBack, .jumpForward, .setMark, .goToMark:
+            .jump
+        case .zoomIn, .zoomOut, .zoomReset, .fitWidth, .fitPage, .toggleDarkMode, .toggleStatus:
+            .zoom
+        case .searchForward, .searchBackward, .searchNext, .searchPrevious, .clearHighlights:
+            .search
+        case .hintFollowLink, .hintInverseSearch, .hintYankLine:
+            .hints
+        case .reload, .toggleFrameHUD, .showCheatsheet, .closeDocument:
+            .other
+        }
+    }
+
+    /// For the `g?` cheatsheet.
+    public var summary: String {
+        switch self {
+        case .scrollDown: "scroll down (hold to glide)"
+        case .scrollUp: "scroll up (hold to glide)"
+        case .scrollLeft: "scroll left"
+        case .scrollRight: "scroll right"
+        case .halfPageDown: "half screen down"
+        case .halfPageUp: "half screen up"
+        case .screenDown: "screen down"
+        case .screenUp: "screen up"
+        case .pageNext: "next page"
+        case .pagePrev: "previous page"
+        case .firstPage: "first page (N: page N)"
+        case .goToPage: "last page (N: page N)"
+        case .zoomIn: "zoom in"
+        case .zoomOut: "zoom out"
+        case .zoomReset: "actual size"
+        case .fitWidth: "fit width"
+        case .fitPage: "fit page"
+        case .toggleFrameHUD: "frame-rate overlay"
+        case .reload: "reload"
+        case .jumpBack: "jump back"
+        case .jumpForward: "jump forward"
+        case .setMark: "set mark {a-z}"
+        case .goToMark: "go to mark {a-z} ('' last jump)"
+        case .searchForward: "search forward"
+        case .searchBackward: "search backward"
+        case .searchNext: "next match"
+        case .searchPrevious: "previous match"
+        case .clearHighlights: "clear highlights"
+        case .hintFollowLink: "follow a link"
+        case .hintInverseSearch: "jump Neovim to a line"
+        case .hintYankLine: "copy a line"
+        case .toggleDarkMode: "dark mode"
+        case .toggleStatus: "pin page / zoom status"
+        case .showCheatsheet: "this cheatsheet"
+        case .closeDocument: "close document"
         }
     }
 }
@@ -71,7 +144,23 @@ public enum KeyMap {
         "m": .setMark, "'": .goToMark,
         "/": .searchForward, "?": .searchBackward, "n": .searchNext, "N": .searchPrevious,
         "f": .hintFollowLink, "F": .hintInverseSearch, "yf": .hintYankLine,
+        "i": .toggleDarkMode, "g.": .toggleStatus, "g?": .showCheatsheet, "q": .closeDocument,
     ]
+
+    /// A binding as it reads on a Mac keyboard: "<C-d>" → "⌃d", "<S-Space>" → "⇧Space", "<Down>" → "↓".
+    public static func display(_ sequence: String) -> String {
+        tokens(of: sequence).map { token -> String in
+            guard token.count > 2, token.hasPrefix("<"), token.hasSuffix(">") else { return token }
+            var name = token.dropFirst().dropLast()[...]
+            var modifiers = ""
+            while name.count > 2, name.dropFirst().first == "-", let m = name.first {
+                modifiers += ["C": "⌃", "M": "⌥", "S": "⇧"][m] ?? ""
+                name = name.dropFirst(2)
+            }
+            let named = ["Down": "↓", "Up": "↑", "Left": "←", "Right": "→", "CR": "↩", "BS": "⌫"][String(name)]
+            return modifiers + (named ?? String(name))
+        }.joined()
+    }
 
     /// Splits a binding like "g<C-d>" into tokens ["g", "<C-d>"].
     public static func tokens(of sequence: String) -> [KeyToken] {

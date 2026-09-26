@@ -45,7 +45,9 @@ final class HintController {
     let overlay = HintOverlay()
     weak var host: HintHost?
 
-    private(set) var isActive = false
+    private(set) var isActive = false { didSet { if isActive != oldValue { onActiveChange?(isActive) } } }
+    /// Hint mode started or ended (for the status pill's mode indicator).
+    var onActiveChange: ((Bool) -> Void)?
     private var kind = HintKind.followLink
     private var hints: [(label: String, target: HintTarget)] = []
     private var typed = ""
