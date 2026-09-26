@@ -21,6 +21,26 @@ public enum Action: String, CaseIterable, Sendable {
     case fitPage = "fit_page"
     case toggleFrameHUD = "toggle_frame_hud"
     case reload = "reload"
+    case jumpBack = "jump_back"
+    case jumpForward = "jump_forward"
+    /// `m{a-z}`: takes the mark name as its argument.
+    case setMark = "set_mark"
+    /// `'{a-z}`, or `''` for the position before the latest jump.
+    case goToMark = "goto_mark"
+    case searchForward = "search_forward"
+    case searchBackward = "search_backward"
+    case searchNext = "search_next"
+    case searchPrevious = "search_previous"
+    /// `Esc` in normal mode: clear search highlights and any pending keys.
+    case clearHighlights = "clear_highlights"
+    case hintFollowLink = "hint_follow_link"
+    case hintInverseSearch = "hint_inverse_search"
+    case hintYankLine = "hint_yank_line"
+
+    /// Actions followed by one more key that names their target, like `m` + `a`.
+    public var takesArgument: Bool {
+        self == .setMark || self == .goToMark
+    }
 
     /// Actions that scroll continuously while their key is held.
     public var isContinuous: Bool {
@@ -47,6 +67,10 @@ public enum KeyMap {
         "w": .fitWidth, "z": .fitPage,
         "g!": .toggleFrameHUD,
         "r": .reload,
+        "<C-o>": .jumpBack, "<C-i>": .jumpForward,
+        "m": .setMark, "'": .goToMark,
+        "/": .searchForward, "?": .searchBackward, "n": .searchNext, "N": .searchPrevious,
+        "f": .hintFollowLink, "F": .hintInverseSearch, "yf": .hintYankLine,
     ]
 
     /// Splits a binding like "g<C-d>" into tokens ["g", "<C-d>"].
@@ -72,14 +96,20 @@ public struct KeyResolver: Sendable {
         /// A prefix of a binding (or a count) is buffered; `display` echoes what's pending.
         case pending(display: String)
         case action(Action, count: Int?)
-        /// Nothing bound; the buffer was cleared.
+        /// An action that took one more key as its argument (`ma` → setMark, "a").
+        case actionWithArgument(Action, argument: KeyToken, count: Int?)
+        /// Nothing bound; the buffer was cleared. `Esc` also lands here, as `.escape`.
         case unbound
+        /// `Esc` with nothing pending, so the caller can treat it as its own command.
+        case escape
     }
 
     private let bindings: [[KeyToken]: Action]
     private let prefixes: Set<[KeyToken]>
     private var count = ""
     private var pending: [KeyToken] = []
+    /// An argument-taking action waiting for its argument key.
+    private var awaiting: Action?
 
     public init(keymap: [String: Action] = KeyMap.defaults) {
         var bindings: [[KeyToken]: Action] = [:]
@@ -93,17 +123,25 @@ public struct KeyResolver: Sendable {
         self.prefixes = prefixes
     }
 
-    public var isIdle: Bool { count.isEmpty && pending.isEmpty }
+    public var isIdle: Bool { count.isEmpty && pending.isEmpty && awaiting == nil }
 
     public mutating func reset() {
         count = ""
         pending = []
+        awaiting = nil
     }
 
     public mutating func feed(_ token: KeyToken) -> Result {
         if token == "<Esc>" {
+            let wasIdle = isIdle
             reset()
-            return .unbound
+            return wasIdle ? .escape : .unbound
+        }
+        if let action = awaiting {
+            let n = Int(count)
+            reset()
+            // Arguments are single printable characters (mark names); anything else cancels.
+            return token.count == 1 ? .actionWithArgument(action, argument: token, count: n) : .unbound
         }
         if pending.isEmpty, let digit = token.first, token.count == 1, digit.isASCII, digit.isNumber,
            digit != "0" || !count.isEmpty {
@@ -113,6 +151,11 @@ public struct KeyResolver: Sendable {
 
         pending.append(token)
         if let action = bindings[pending] {
+            if action.takesArgument {
+                awaiting = action
+                pending = []
+                return .pending(display: count + KeyMap.tokens(of: token).joined())
+            }
             let n = Int(count)
             reset()
             return .action(action, count: n)

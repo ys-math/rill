@@ -15,7 +15,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate {
 
     init(url: URL?, store: DocumentStateStore) {
         self.store = store
-        let window = NSWindow(
+        let window = DocumentWindow(
             contentRect: NSRect(x: 0, y: 0, width: 900, height: 1100),
             styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered,
@@ -27,6 +27,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate {
         window.center()
         super.init(window: window)
         window.delegate = self
+        window.onEscape = { [weak self] in self?.documentController?.handleEscape() }
 
         placeholder.textColor = .tertiaryLabelColor
         placeholder.font = .monospacedSystemFont(ofSize: 13, weight: .regular)
@@ -103,6 +104,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate {
         documentController?.handleKeyUp(event)
     }
 
+
     func windowDidResignKey(_ notification: Notification) {
         saveState()
         try? store.save()
@@ -113,5 +115,15 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate {
         try? store.save()
         reloader?.stop()
         onClose?()
+    }
+}
+
+/// Hands `Esc` to the document. NSWindow otherwise consumes it (as `cancelOperation:`)
+/// before it can reach the window controller.
+final class DocumentWindow: NSWindow {
+    var onEscape: (() -> Void)?
+
+    override func cancelOperation(_ sender: Any?) {
+        if let onEscape { onEscape() } else { super.cancelOperation(sender) }
     }
 }

@@ -45,12 +45,28 @@ public struct DocumentState: Codable, Equatable, Sendable {
     public var x: Double
     public var zoom: ZoomSetting
     public var lastOpened: Date
+    /// `m{a-z}` marks.
+    public var marks: [String: PagePosition]
 
-    public init(position: PagePosition, x: Double = 0, zoom: ZoomSetting, lastOpened: Date = Date()) {
+    public init(position: PagePosition, x: Double = 0, zoom: ZoomSetting, lastOpened: Date = Date(),
+                marks: [String: PagePosition] = [:]) {
         self.position = position
         self.x = x
         self.zoom = zoom
         self.lastOpened = lastOpened
+        self.marks = marks
+    }
+
+    private enum CodingKeys: String, CodingKey { case position, x, zoom, lastOpened, marks }
+
+    // Written by hand so state saved before a field existed still loads.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        position = try c.decode(PagePosition.self, forKey: .position)
+        x = try c.decodeIfPresent(Double.self, forKey: .x) ?? 0
+        zoom = try c.decodeIfPresent(ZoomSetting.self, forKey: .zoom) ?? .fitWidth
+        lastOpened = try c.decodeIfPresent(Date.self, forKey: .lastOpened) ?? .distantPast
+        marks = try c.decodeIfPresent([String: PagePosition].self, forKey: .marks) ?? [:]
     }
 }
 

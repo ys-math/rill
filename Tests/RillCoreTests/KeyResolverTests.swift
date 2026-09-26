@@ -48,6 +48,48 @@ struct KeyResolverTests {
         #expect(r.feed("k") == .action(.scrollUp, count: nil))
     }
 
+    @Test func escapeWhenIdleIsItsOwnCommand() {
+        var r = KeyResolver()
+        #expect(r.feed("<Esc>") == .escape)
+    }
+
+    @Test func marksTakeAnArgument() {
+        var r = KeyResolver()
+        #expect(r.feed("m") == .pending(display: "m"))
+        #expect(r.feed("a") == .actionWithArgument(.setMark, argument: "a", count: nil))
+        #expect(r.isIdle)
+        #expect(r.feed("'") == .pending(display: "'"))
+        #expect(r.feed("'") == .actionWithArgument(.goToMark, argument: "'", count: nil))
+    }
+
+    @Test func argumentKeyIsNotLookedUpAsABinding() {
+        var r = KeyResolver()
+        _ = r.feed("m")
+        // "j" is bound to scrolling, but after `m` it's just the mark's name.
+        #expect(r.feed("j") == .actionWithArgument(.setMark, argument: "j", count: nil))
+    }
+
+    @Test func namedKeyCancelsArgument() {
+        var r = KeyResolver()
+        _ = r.feed("m")
+        #expect(r.feed("<Down>") == .unbound)
+        #expect(r.isIdle)
+        _ = r.feed("m")
+        #expect(r.feed("<Esc>") == .unbound)
+    }
+
+    @Test func hintAndSearchBindings() {
+        var r = KeyResolver()
+        #expect(r.feed("f") == .action(.hintFollowLink, count: nil))
+        #expect(r.feed("F") == .action(.hintInverseSearch, count: nil))
+        #expect(r.feed("y") == .pending(display: "y"))
+        #expect(r.feed("f") == .action(.hintYankLine, count: nil))
+        #expect(r.feed("/") == .action(.searchForward, count: nil))
+        #expect(r.feed("3") == .pending(display: "3"))
+        #expect(r.feed("n") == .action(.searchNext, count: 3))
+        #expect(r.feed("<C-o>") == .action(.jumpBack, count: nil))
+    }
+
     @Test func namedAndModifiedKeys() {
         var r = KeyResolver()
         #expect(r.feed("<C-d>") == .action(.halfPageDown, count: nil))

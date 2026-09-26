@@ -138,6 +138,20 @@ final class DocumentView: NSView {
         CATransaction.commit()
     }
 
+    /// Search highlights: every match, and the current one more strongly.
+    func setHighlights(_ matches: [SearchMatch], current: Int?) {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        defer { CATransaction.commit() }
+        for page in pages { page.setHighlights(nil, current: nil) }
+        var byPage: [Int: [CGRect]] = [:]
+        for match in matches where match.page < pages.count { byPage[match.page, default: []].append(match.rect) }
+        let currentMatch = current.flatMap { matches.indices.contains($0) ? matches[$0] : nil }
+        for (index, rects) in byPage {
+            pages[index].setHighlights(rects, current: currentMatch?.page == index ? currentMatch?.rect : nil)
+        }
+    }
+
     /// Stops all rendering. Call before discarding the view.
     func teardown() {
         readiness = nil
@@ -250,6 +264,34 @@ private final class PageLayer: CALayer {
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
+
+    private var highlights: CAShapeLayer?
+    private var currentHighlight: CAShapeLayer?
+
+    func setHighlights(_ rects: [CGRect]?, current: CGRect?) {
+        highlights?.removeFromSuperlayer()
+        currentHighlight?.removeFromSuperlayer()
+        highlights = nil
+        currentHighlight = nil
+        guard let rects, !rects.isEmpty else { return }
+        highlights = addHighlight(rects, color: NSColor.systemYellow.withAlphaComponent(0.35))
+        if let current {
+            currentHighlight = addHighlight([current], color: NSColor.systemOrange.withAlphaComponent(0.55))
+        }
+    }
+
+    private func addHighlight(_ rects: [CGRect], color: NSColor) -> CAShapeLayer {
+        let path = CGMutablePath()
+        for rect in rects { path.addRoundedRect(in: rect.insetBy(dx: -1, dy: -1), cornerWidth: 2, cornerHeight: 2) }
+        let layer = CAShapeLayer()
+        layer.frame = bounds
+        layer.path = path
+        layer.fillColor = color.cgColor
+        layer.zPosition = 5
+        layer.actions = Self.noActions
+        addSublayer(layer)
+        return layer
+    }
 
     func setThumbnail(_ image: CGImage) {
         content.contents = image

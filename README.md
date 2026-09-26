@@ -3,8 +3,8 @@
 A keyboard-driven, native macOS PDF viewer for writing LaTeX in Neovim: Skim's native feel with a
 sioyek-style keyboard model. See [SPEC.md](SPEC.md) for the full v1 plan.
 
-**Status:** in progress. Rendering, smooth motion, auto-reload, and SyncTeX with Neovim work.
-Hint mode, search, marks, config file, and pickers are next.
+**Status:** in progress. Rendering, smooth motion, auto-reload, SyncTeX with Neovim, search,
+hints, marks and the jump list work. The config file, overlays and pickers are next.
 
 ## Install
 
@@ -44,10 +44,19 @@ Compile with SyncTeX enabled (vimtex's latexmk defaults already pass `-synctex=1
 | `gg` / `G` / `{n}G` | First / last / page n |
 | `+` / `-` / `=` | Zoom in / out / 100% |
 | `w` / `z` | Fit width / fit page |
+| `/` / `?` | Search forward / backward (smart-case; `Enter` accepts, `Esc` returns) |
+| `n` / `N` | Next / previous match |
+| `Esc` | Clear search highlights |
+| `f` | Follow a link (labels appear; type one) |
+| `F` | Inverse search on a line: jump Neovim to its source |
+| `yf` | Copy a line |
+| `⌃o` / `⌃i` | Jump back / forward |
+| `m{a-z}` / `'{a-z}` | Set / go to a mark (saved per document) |
+| `''` | Back to where the last jump started |
 | `r` | Reload |
 | `g!` | Frame-rate overlay |
 
-Counts work with motions: `5j`, `3J`, `12G`.
+Counts work with motions: `5j`, `3J`, `12G`, `3n`.
 
 ## CLI
 

@@ -1,4 +1,5 @@
 import AppKit
+import RillCore
 
 /// Headless-ish visual check: with `RILL_SNAPSHOT=/path/out.png` set, the app types the keys in
 /// `RILL_SNAPSHOT_KEYS` (space-separated sequences, one every 0.6 s), lets rendering settle,
@@ -14,15 +15,13 @@ enum DebugSnapshot {
             try? await Task.sleep(for: .seconds(0.8))
             var log = "active=\(NSApp.isActive) key=\(window.isKeyWindow) firstResponder=\(String(describing: window.firstResponder))\n"
             for step in steps {
-                if env["RILL_SNAPSHOT_REAL_EVENTS"] != nil, let arrow = arrowKeys[step] {
-                    postKey(code: arrow.code, characters: arrow.characters, shift: false, window: window)
-                } else if env["RILL_SNAPSHOT_REAL_EVENTS"] != nil {
-                    for character in step { postKey(character, window: window) }
+                if env["RILL_SNAPSHOT_REAL_EVENTS"] != nil {
+                    for token in KeyMap.tokens(of: step) { post(token, window: window) }
                 } else {
                     document.feed(keys: step)
                 }
                 try? await Task.sleep(for: .seconds(0.6))
-                log += "after \(step): origin=\(window.contentView.map { _ in document.debugOrigin } ?? .zero)\n"
+                log += "after \(step): \(document.debugStatus)\n"
             }
             let delay = Double(env["RILL_SNAPSHOT_DELAY"] ?? "") ?? 1.0
             try? await Task.sleep(for: .seconds(delay))
@@ -34,26 +33,38 @@ enum DebugSnapshot {
         }
     }
 
-    private static let arrowKeys: [String: (code: UInt16, characters: String)] = [
-        "<Left>": (123, "\u{F702}"), "<Right>": (124, "\u{F703}"), "<Down>": (125, "\u{F701}"), "<Up>": (126, "\u{F700}"),
+    /// Named keys: (keyCode, characters, charactersIgnoringModifiers, modifiers).
+    private static let namedKeys: [String: (UInt16, String, String, NSEvent.ModifierFlags)] = [
+        "<Left>": (123, "\u{F702}", "\u{F702}", [.function, .numericPad]),
+        "<Right>": (124, "\u{F703}", "\u{F703}", [.function, .numericPad]),
+        "<Down>": (125, "\u{F701}", "\u{F701}", [.function, .numericPad]),
+        "<Up>": (126, "\u{F700}", "\u{F700}", [.function, .numericPad]),
+        "<Esc>": (53, "\u{1B}", "\u{1B}", []),
+        "<CR>": (36, "\r", "\r", []),
+        "<BS>": (51, "\u{7F}", "\u{7F}", []),
+        "<C-o>": (31, "\u{0F}", "o", [.control]),
+        "<C-i>": (34, "\t", "i", [.control]),
     ]
 
-    /// Posts a real key down/up pair through the app's event queue, exercising the responder chain.
-    private static func postKey(_ character: Character, window: NSWindow) {
-        let keyCodes: [Character: UInt16] = ["j": 38, "k": 40, "d": 2, "u": 32, "G": 5, "g": 5, "+": 24, "-": 27, "w": 13, "z": 6]
-        postKey(code: keyCodes[character] ?? 0, characters: String(character),
-                shift: character.isUppercase || character == "+", window: window)
-    }
-
-    private static func postKey(code: UInt16, characters: String, shift: Bool, window: NSWindow) {
-        // Real arrow events carry these flags; include them so the test matches the keyboard.
-        var flags: NSEvent.ModifierFlags = shift ? [.shift] : []
-        if (123...126).contains(code) { flags.formUnion([.function, .numericPad]) }
+    /// Posts a real key down/up pair through the app's event queue, exercising the responder
+    /// chain (and text fields, for search).
+    private static func post(_ token: KeyToken, window: NSWindow) {
+        let (code, characters, unmodified, flags): (UInt16, String, String, NSEvent.ModifierFlags)
+        if let named = namedKeys[token] {
+            (code, characters, unmodified, flags) = named
+        } else {
+            let keyCodes: [Character: UInt16] = ["j": 38, "k": 40, "d": 2, "u": 32, "g": 5, "+": 24, "-": 27, "w": 13, "z": 6,
+                                                 "/": 44, "?": 44, "n": 45, "m": 46, "'": 39, "f": 3, "y": 16, "a": 0, "s": 1]
+            let c = Character(token)
+            code = keyCodes[Character(c.lowercased())] ?? 0
+            (characters, unmodified) = (token, token)
+            flags = c.isUppercase || "+?".contains(c) ? [.shift] : []
+        }
         for type in [NSEvent.EventType.keyDown, .keyUp] {
             if let event = NSEvent.keyEvent(
                 with: type, location: .zero, modifierFlags: flags, timestamp: ProcessInfo.processInfo.systemUptime,
                 windowNumber: window.windowNumber, context: nil, characters: characters,
-                charactersIgnoringModifiers: characters, isARepeat: false, keyCode: code) {
+                charactersIgnoringModifiers: unmodified, isARepeat: false, keyCode: code) {
                 NSApp.postEvent(event, atStart: false)
             }
         }
