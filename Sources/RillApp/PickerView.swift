@@ -131,9 +131,10 @@ final class PickerView: NSView, NSTextFieldDelegate, NSTableViewDataSource, NSTa
         window?.makeFirstResponder(field)
     }
 
-    /// More entries arrived (e.g. from Spotlight); keeps the selection's place.
-    func append(_ more: [PickerEntry]) {
-        entries += more
+    /// Replaces the entries (e.g. when Spotlight results arrive), keeping the query.
+    func setEntries(_ entries: [PickerEntry]) {
+        self.entries = entries
+        thumbnails = [:]
         rank()
     }
 

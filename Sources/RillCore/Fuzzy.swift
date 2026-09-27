@@ -85,3 +85,24 @@ public func abbreviateHome(_ path: String, home: String = NSHomeDirectory()) -> 
 public func expandHome(_ path: String, home: String = NSHomeDirectory()) -> String {
     path == "~" ? home : path.hasPrefix("~/") ? home + path.dropFirst(1) : path
 }
+
+/// Names that tell files apart: the file name alone when it's unique, otherwise the shortest
+/// run of parent folders that makes it unique, e.g. `homological_algebra/main.pdf` next to
+/// `topology/main.pdf`.
+public func distinguishingNames(_ paths: [String]) -> [String] {
+    let components = paths.map { $0.split(separator: "/").map(String.init) }
+    var depth = [Int](repeating: 1, count: paths.count)
+    func name(_ i: Int) -> String { components[i].suffix(depth[i]).joined(separator: "/") }
+    while true {
+        let groups = Dictionary(grouping: paths.indices, by: name).values.filter { $0.count > 1 }
+        var grew = false
+        for group in groups {
+            for i in group where depth[i] < components[i].count {
+                depth[i] += 1
+                grew = true
+            }
+        }
+        if !grew { break }
+    }
+    return paths.indices.map(name)
+}

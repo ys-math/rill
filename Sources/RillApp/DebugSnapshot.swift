@@ -6,9 +6,13 @@ import RillCore
 /// writes the window's layer tree to a PNG and quits.
 @MainActor
 enum DebugSnapshot {
+    /// Once per process: a script that loads another document (⌃^, the picker) must not start again.
+    private static var started = false
+
     static func runIfRequested(window: NSWindow, document: DocumentViewController) {
         let env = ProcessInfo.processInfo.environment
-        guard let path = env["RILL_SNAPSHOT"] else { return }
+        guard let path = env["RILL_SNAPSHOT"], !started else { return }
+        started = true
         let steps = (env["RILL_SNAPSHOT_KEYS"] ?? "").split(separator: " ").map(String.init)
 
         Task { @MainActor in
@@ -50,6 +54,7 @@ enum DebugSnapshot {
         "<BS>": (51, "\u{7F}", "\u{7F}", []),
         "<S-Down>": (125, "\u{F701}", "\u{F701}", [.function, .numericPad, .shift]),
         "<C-o>": (31, "\u{0F}", "o", [.control]),
+        "<C-^>": (22, "\u{1E}", "^", [.control, .shift]),
         "<C-i>": (34, "\t", "i", [.control]),
     ]
 

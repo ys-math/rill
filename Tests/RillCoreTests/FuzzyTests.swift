@@ -47,3 +47,24 @@ struct FuzzyTests {
         #expect(expandHome("/abs", home: "/Users/me") == "/abs")
     }
 }
+
+struct DistinguishingNameTests {
+    @Test func uniqueNamesStayShort() {
+        #expect(distinguishingNames(["/a/x.pdf", "/b/y.pdf"]) == ["x.pdf", "y.pdf"])
+    }
+
+    @Test func duplicatesGainTheirFolder() {
+        #expect(distinguishingNames([
+            "/m/tex/homological_algebra/main.pdf", "/m/tex/topology/main.pdf", "/m/pdf/topology.pdf",
+        ]) == ["homological_algebra/main.pdf", "topology/main.pdf", "topology.pdf"])
+    }
+
+    @Test func goesAsDeepAsNeeded() {
+        #expect(distinguishingNames(["/a/src/main.pdf", "/b/src/main.pdf", "/c/main.pdf"])
+                == ["a/src/main.pdf", "b/src/main.pdf", "c/main.pdf"])
+    }
+
+    @Test func identicalPathsDoNotLoop() {
+        #expect(distinguishingNames(["/a/x.pdf", "/a/x.pdf"]) == ["a/x.pdf", "a/x.pdf"])
+    }
+}

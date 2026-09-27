@@ -91,7 +91,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             controller = DocumentWindowController(url: url, store: store)
             windows.append(controller)
             controller.onClose = { [weak self, weak controller] in self?.windows.removeAll { $0 === controller } }
-            controller.onOpen = { [weak self] in self?.window(for: $0, activate: true) }
+            wire(controller)
             isNew = true
         }
         if activate {
@@ -107,8 +107,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func show(_ controller: DocumentWindowController) {
         windows.append(controller)
         controller.onClose = { [weak self, weak controller] in self?.windows.removeAll { $0 === controller } }
-        controller.onOpen = { [weak self] in self?.window(for: $0, activate: true) }
+        wire(controller)
         controller.showWindow(nil)
+    }
+
+    private func wire(_ controller: DocumentWindowController) {
+        controller.onOpen = { [weak self] in self?.window(for: $0, activate: true) }
+        controller.onAlternate = { [weak self, weak controller] in
+            if let controller { self?.showAlternate(from: controller) }
+        }
+    }
+
+    /// `⌃^`: the most recently used other PDF. If it's open, its window comes forward;
+    /// otherwise it replaces this window's document, as Vim's alternate file does. Loading
+    /// saves the outgoing document as most recent, so pressing again toggles back.
+    private func showAlternate(from controller: DocumentWindowController) {
+        controller.saveState()
+        let current = controller.url?.standardizedFileURL.path
+        guard let path = FileCatalog.recents(from: store).first(where: { $0 != current }) else {
+            controller.showToast("no previous PDF", briefly: true)
+            return
+        }
+        if let open = windows.first(where: { $0.url?.standardizedFileURL.path == path }) {
+            open.showWindow(nil)
+        } else {
+            controller.load(URL(fileURLWithPath: path))
+        }
     }
 
     // MARK: - Socket
