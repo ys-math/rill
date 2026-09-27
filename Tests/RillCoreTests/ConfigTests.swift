@@ -146,6 +146,25 @@ struct ConfigTests {
         #expect(Config.defaultURL(environment: [:]).path.hasSuffix("/.config/rill/config.toml"))
     }
 
+    @Test func templateParsesToTheDefaults() throws {
+        let (config, warnings) = try Config.parse(Config.template)
+        #expect(config == Config())
+        #expect(warnings.isEmpty)
+    }
+
+    @Test func editCommand() throws {
+        #expect(Config().renderedEditCommand(path: "/a/config.toml") == nil)
+        let (config, warnings) = try Config.parse("""
+            [config]
+            edit_command = "open -na Ghostty --args -e nvim %file"
+            """)
+        #expect(warnings.isEmpty)
+        #expect(config.renderedEditCommand(path: "/My Stuff/it's.toml")
+            == #"open -na Ghostty --args -e nvim '/My Stuff/it'\''s.toml'"#)
+        #expect(try Config.parse("[config]\nedit_command = \"\"").config.editCommand == nil)
+        #expect(try Config.parse("[config]\neditor = 1").warnings == ["[config] editor: unknown setting"])
+    }
+
     @Test func everyActionHasASummary() {
         for action in Action.allCases { #expect(!action.summary.isEmpty) }
     }

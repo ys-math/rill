@@ -7,6 +7,8 @@ enum MainMenu {
         let main = NSMenu()
 
         let appMenu = NSMenu()
+        appMenu.addItem(withTitle: "Edit Config…", action: #selector(AppDelegate.editConfig(_:)), keyEquivalent: ",")
+        appMenu.addItem(.separator())
         appMenu.addItem(withTitle: "Hide rill", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
         appMenu.addItem(.separator())
         appMenu.addItem(withTitle: "Quit rill", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")

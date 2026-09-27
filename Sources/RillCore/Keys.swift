@@ -54,6 +54,8 @@ public enum Action: String, CaseIterable, Sendable {
     case toggleSpread = "toggle_spread"
     /// `c`: auto-trim the white margins.
     case toggleTrim = "toggle_trim"
+    /// `g,` (and ⌘,): open config.toml in an editor. Saving it applies the changes.
+    case editConfig = "edit_config"
 
     /// Actions followed by one more key that names their target, like `m` + `a`.
     public var takesArgument: Bool {
@@ -92,7 +94,7 @@ extension Action {
             .search
         case .hintFollowLink, .hintInverseSearch, .hintYankLine, .hintPreviewLink, .visualMode, .visualLineMode:
             .hints
-        case .reload, .toggleFrameHUD, .showCheatsheet, .closeDocument, .openFile, .alternateFile:
+        case .reload, .toggleFrameHUD, .showCheatsheet, .closeDocument, .openFile, .alternateFile, .editConfig:
             .other
         }
     }
@@ -144,6 +146,7 @@ extension Action {
         case .visualLineMode: "select whole lines"
         case .toggleSpread: "two-page spread (pairs / book / off)"
         case .toggleTrim: "trim white margins"
+        case .editConfig: "edit the config (applies on save)"
         }
     }
 }
@@ -168,7 +171,7 @@ public enum KeyMap {
         "m": .setMark, "'": .goToMark,
         "/": .searchForward, "?": .searchBackward, "n": .searchNext, "N": .searchPrevious,
         "f": .hintFollowLink, "F": .hintInverseSearch, "yf": .hintYankLine,
-        "i": .toggleDarkMode, "g.": .toggleStatus, "g?": .showCheatsheet, "q": .closeDocument,
+        "i": .toggleDarkMode, "g.": .toggleStatus, "g?": .showCheatsheet, "g,": .editConfig, "q": .closeDocument,
         "o": .openFile, "t": .showOutline, "s": .toggleSinglePage, "S": .toggleSpread, "c": .toggleTrim,
         "<C-^>": .alternateFile, "<C-6>": .alternateFile,
         "p": .hintPreviewLink, "v": .visualMode, "V": .visualLineMode,

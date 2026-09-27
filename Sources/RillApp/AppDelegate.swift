@@ -11,6 +11,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.mainMenu = MainMenu.make()
         ConfigStore.shared.onProblem = { [weak self] message in self?.showProblem(message) }
+        ConfigStore.shared.onApplied = { [weak self] in
+            self?.frontWindow?.showToast("config applied", briefly: true)
+        }
         startServer()
         // Launched by hand (Dock, Spotlight) with nothing to open: show the picker. Not when
         // started in the background for a forward search, which must not take focus.
@@ -43,11 +46,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         for url in panel.urls { window(for: url, activate: true) }
     }
 
+    /// ⌘,: open config.toml in an editor; saving it applies the changes.
+    @objc func editConfig(_ sender: Any?) {
+        if let problem = ConfigStore.shared.edit() { showProblem(problem) }
+    }
+
     /// Config problems go to the frontmost document; with none open, to the next one that opens.
     private var pendingProblem: String?
 
+    private var frontWindow: DocumentWindowController? {
+        windows.first(where: { $0.window?.isKeyWindow == true }) ?? windows.first
+    }
+
     private func showProblem(_ message: String) {
-        if let front = windows.first(where: { $0.window?.isKeyWindow == true }) ?? windows.first, front.showToast(message) {
+        if let frontWindow, frontWindow.showToast(message) {
             return
         }
         pendingProblem = message
