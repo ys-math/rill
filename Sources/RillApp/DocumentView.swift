@@ -35,8 +35,9 @@ final class DocumentView: NSView {
         super.init(frame: CGRect(origin: .zero, size: layout.size))
         wantsLayer = true
         layerContentsRedrawPolicy = .never
-        for frame in layout.pageFrames {
-            let page = PageLayer(frame: frame, paper: dark ? PaperRecolor.paperColor : .white)
+        for (index, frame) in layout.pageFrames.enumerated() {
+            let page = PageLayer(frame: frame, trim: layout.trims[index], pageSize: source.pageSizes[index],
+                                 paper: dark ? PaperRecolor.paperColor : .white)
             layer!.addSublayer(page)
             pages.append(page)
         }
@@ -70,10 +71,9 @@ final class DocumentView: NSView {
         if settled {
             currentLevel = TileGrid.level(forPixelsPerPoint: magnification * backingScale)
             for index in prefetchPages {
-                let frame = layout.pageFrames[index]
-                let region = (visiblePages.contains(index) ? visible : prefetch).offsetBy(dx: -frame.minX, dy: -frame.minY)
+                let region = pageRegion(index, visiblePages.contains(index) ? visible : prefetch)
                 let priority: RenderScheduler.Priority = visiblePages.contains(index) ? .visible : .prefetch
-                for key in TileGrid.keys(page: index, level: currentLevel, pageSize: frame.size, visible: region)
+                for key in TileGrid.keys(page: index, level: currentLevel, pageSize: source.pageSizes[index], visible: region)
                 where tiles[key] == nil {
                     wanted[.tile(key)] = priority
                 }
@@ -98,9 +98,8 @@ final class DocumentView: NSView {
         updateContent(visible: visible, magnification: magnification, backingScale: backingScale, settled: true)
         var missing = Set<TileKey>()
         for index in layout.pages(inYRange: visible.minY, visible.maxY) ?? 0...(-1) {
-            let frame = layout.pageFrames[index]
-            let region = visible.offsetBy(dx: -frame.minX, dy: -frame.minY)
-            missing.formUnion(TileGrid.keys(page: index, level: currentLevel, pageSize: frame.size, visible: region)
+            missing.formUnion(TileGrid.keys(page: index, level: currentLevel, pageSize: source.pageSizes[index],
+                                            visible: pageRegion(index, visible))
                 .filter { tiles[$0] == nil })
         }
         if missing.isEmpty { completion() } else { readiness = (missing, completion) }
@@ -164,11 +163,11 @@ final class DocumentView: NSView {
         CATransaction.commit()
     }
 
-    /// Single-page mode: hide every page but `page` (nil shows them all).
-    func showOnly(page: Int?) {
+    /// Single-page mode: hide every page but `shown` (nil shows them all).
+    func showOnly(pages shown: ClosedRange<Int>?) {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        for (index, layer) in pages.enumerated() { layer.isHidden = page.map { $0 != index } ?? false }
+        for (index, layer) in pages.enumerated() { layer.isHidden = shown.map { !$0.contains(index) } ?? false }
         CATransaction.commit()
     }
 
@@ -208,7 +207,7 @@ final class DocumentView: NSView {
             for range in ranges {
                 let height = max(range.upperBound - range.lowerBound, 5)
                 let marker = CALayer()
-                marker.frame = CGRect(x: frame.minX - 8, y: frame.minY + (range.lowerBound + range.upperBound) / 2 - height / 2,
+                marker.frame = CGRect(x: frame.minX - 8, y: layout.origin(ofPage: index).y + (range.lowerBound + range.upperBound) / 2 - height / 2,
                                       width: 3, height: height)
                 marker.cornerRadius = 1.5
                 marker.name = "change"
@@ -253,7 +252,7 @@ final class DocumentView: NSView {
         case .tile(let key):
             guard tiles[key] == nil else { return }
             let scale = TileGrid.scale(forLevel: key.level)
-            let rect = TileGrid.rect(of: key, pageSize: layout.pageFrames[key.page].size)
+            let rect = TileGrid.rect(of: key, pageSize: source.pageSizes[key.page])
             let tile = CALayer()
             tile.contents = image
             tile.contentsGravity = .resize
@@ -285,9 +284,7 @@ final class DocumentView: NSView {
     /// Once the current level covers everything visible on a page, older levels are dead weight.
     private func retireOldLevels(onPage index: Int) {
         guard let visible = superview.map({ convert($0.bounds, from: $0) }) else { return }
-        let frame = layout.pageFrames[index]
-        let region = visible.offsetBy(dx: -frame.minX, dy: -frame.minY)
-        let needed = TileGrid.keys(page: index, level: currentLevel, pageSize: frame.size, visible: region)
+        let needed = TileGrid.keys(page: index, level: currentLevel, pageSize: source.pageSizes[index], visible: pageRegion(index, visible))
         guard needed.allSatisfy({ tiles[$0] != nil }) else { return }
         for (key, tile) in tiles where key.page == index && key.level != currentLevel {
             tile.removeFromSuperlayer()
@@ -297,8 +294,8 @@ final class DocumentView: NSView {
 
     private func evictTiles(keeping region: CGRect) {
         for (key, tile) in tiles {
-            let frame = layout.pageFrames[key.page]
-            let rect = TileGrid.rect(of: key, pageSize: frame.size).offsetBy(dx: frame.minX, dy: frame.minY)
+            let origin = layout.origin(ofPage: key.page)
+            let rect = TileGrid.rect(of: key, pageSize: source.pageSizes[key.page]).offsetBy(dx: origin.x, dy: origin.y)
             // Tiles of an old level stay while they're still covering for the current one.
             let stale = key.level != currentLevel && tilesCover(page: key.page, rect: rect)
             if !rect.intersects(region) || stale {
@@ -311,22 +308,32 @@ final class DocumentView: NSView {
     }
 
     private func tilesCover(page: Int, rect: CGRect) -> Bool {
-        let frame = layout.pageFrames[page]
-        let local = rect.offsetBy(dx: -frame.minX, dy: -frame.minY)
-        return TileGrid.keys(page: page, level: currentLevel, pageSize: frame.size, visible: local)
+        TileGrid.keys(page: page, level: currentLevel, pageSize: source.pageSizes[page], visible: pageRegion(page, rect))
             .allSatisfy { tiles[$0] != nil }
+    }
+
+    /// The part of page `index` that's shown and inside `rect` (document coordinates), in page coordinates.
+    private func pageRegion(_ index: Int, _ rect: CGRect) -> CGRect {
+        let origin = layout.origin(ofPage: index)
+        return rect.offsetBy(dx: -origin.x, dy: -origin.y).intersection(layout.trims[index])
     }
 }
 
 /// A page: a shadowed white card with a clipped content layer holding the thumbnail and tiles.
+/// The card shows only the page's trim; sublayers are placed in page display coordinates.
 @MainActor
 private final class PageLayer: CALayer {
     let content = CALayer()
+    private let thumbnail = CALayer()
+    private var pageSize = CGSize.zero
     private(set) var hasThumbnail = false
 
-    init(frame: CGRect, paper: CGColor) {
+    init(frame: CGRect, trim: CGRect, pageSize: CGSize, paper: CGColor) {
         super.init()
         self.frame = frame
+        // Shifting the bounds origin puts page coordinates, not card coordinates, at the sublayers' disposal.
+        bounds = trim
+        self.pageSize = pageSize
         backgroundColor = paper
         shadowColor = .black
         shadowOpacity = 0.18
@@ -336,10 +343,15 @@ private final class PageLayer: CALayer {
         actions = Self.noActions
 
         content.frame = bounds
+        content.bounds = bounds
         content.masksToBounds = true
-        content.contentsGravity = .resize
         content.actions = Self.noActions
         addSublayer(content)
+        thumbnail.frame = CGRect(origin: .zero, size: pageSize)
+        thumbnail.contentsGravity = .resize
+        thumbnail.zPosition = -1
+        thumbnail.actions = Self.noActions
+        content.addSublayer(thumbnail)
     }
 
     override init(layer: Any) { super.init(layer: layer) }
@@ -364,7 +376,7 @@ private final class PageLayer: CALayer {
             if rounded { path.addRoundedRect(in: rect.insetBy(dx: -1, dy: -1), cornerWidth: 2, cornerHeight: 2) } else { path.addRect(rect) }
         }
         let layer = CAShapeLayer()
-        layer.frame = bounds
+        layer.frame = CGRect(origin: .zero, size: pageSize)
         layer.path = path
         layer.fillColor = color.cgColor
         layer.zPosition = z
@@ -374,12 +386,12 @@ private final class PageLayer: CALayer {
     }
 
     func setThumbnail(_ image: CGImage) {
-        content.contents = image
+        thumbnail.contents = image
         hasThumbnail = true
     }
 
     func dropThumbnail() {
-        content.contents = nil
+        thumbnail.contents = nil
         hasThumbnail = false
     }
 
