@@ -91,7 +91,11 @@ page_gap = 8                 # points between pages
 change_markers = true        # mark changed lines in the margin after a recompile
 spread = "off"               # "pairs" (1–2, 3–4, …) | "book" (1, 2–3, …): two pages per row
 trim = false                 # cut away the white margins around the text
-rounded_corners = false      # round the corners of the pages
+rounded_corners = false      # true (6) | a radius in page points: round the corners of the pages
+scroll_step = 0.1            # j/k/h/l: fraction of the window to scroll (0.01–1)
+zoom_step = 1.25             # +/-: zoom multiplier (1.01–4)
+dark_paper = "#242424"       # page colour in dark mode ("#rrggbb")
+dark_ink = "#dbdbdb"         # text colour in dark mode ("#rrggbb")
 background = "solid"         # "blur" (the desktop, blurred) | "glass" (Liquid Glass): around the pages
 overlays = "blur"            # "glass": Liquid Glass for the search bar, status, toasts, picker, cheatsheet
 

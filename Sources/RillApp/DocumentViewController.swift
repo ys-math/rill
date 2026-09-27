@@ -69,7 +69,7 @@ final class DocumentViewController: NSViewController {
         self.source = source
         self.layout = PageLayout(pageSizes: source.pageSizes, spread: ConfigStore.shared.config.spread,
                                  gap: CGFloat(ConfigStore.shared.config.pageGap))
-        self.documentView = DocumentView(source: source, layout: layout, dark: Self.wantsDark(override: nil))
+        self.documentView = DocumentView(source: source, layout: layout, recolor: Self.recolor(darkOverride: nil))
         self.initialState = state
         self.syncIndex = SyncIndex(pdfPath: source.url.path)
         self.marks = state?.marks ?? [:]
@@ -162,12 +162,19 @@ final class DocumentViewController: NSViewController {
         }
     }
 
+    /// How pages should be recoloured now: nil in light mode.
+    private static func recolor(darkOverride: Bool?) -> PaperRecolor? {
+        guard wantsDark(override: darkOverride) else { return nil }
+        let config = ConfigStore.shared.config
+        return PaperRecolor(paper: config.darkPaper, ink: config.darkInk)
+    }
+
     private func configDidChange() {
         let config = ConfigStore.shared.config
         resolver = KeyResolver(keymap: config.keymap)
         applyBackground()
         applyCorners()
-        if layout != makeLayout(for: source) || documentView.dark != Self.wantsDark(override: darkOverride) {
+        if layout != makeLayout(for: source) || documentView.recolor != Self.recolor(darkOverride: darkOverride) {
             rebuild()
         }
         measureTrimIfNeeded()
@@ -178,11 +185,11 @@ final class DocumentViewController: NSViewController {
     }
 
     private func applyCorners() {
-        documentView.pageCornerRadius = ConfigStore.shared.config.roundedCorners ? 6 : 0
+        documentView.pageCornerRadius = ConfigStore.shared.config.cornerRadius
     }
 
     private func appearanceDidChange() {
-        if documentView.dark != Self.wantsDark(override: darkOverride) { rebuild() }
+        if documentView.recolor != Self.recolor(darkOverride: darkOverride) { rebuild() }
     }
 
     /// Re-renders the same version with current settings (dark mode, page gap, spread, trim),
@@ -378,12 +385,12 @@ final class DocumentViewController: NSViewController {
             let region = CGRect(x: trim.minX, y: top, width: trim.width, height: max(min(230, trim.maxY - top), 1))
             let magnification = scrollView.magnification
             let scale = min(magnification * backingScale, 4)
-            let source = source, dark = documentView.dark
+            let source = source, recolor = documentView.recolor
             Task { [weak self] in
                 let image = await Task.detached(priority: .userInitiated) { () -> UncheckedImageBox? in
                     let pixels = CGRect(x: region.minX * scale, y: region.minY * scale, width: region.width * scale, height: region.height * scale)
                     guard let plain = source.render(page: index, pixelRect: pixels, scale: scale) else { return nil }
-                    return UncheckedImageBox(dark ? PaperRecolor.apply(plain) ?? plain : plain)
+                    return UncheckedImageBox(recolor.flatMap { $0.apply(plain) } ?? plain)
                 }.value
                 guard let self, self.linkPreview.target?.rect == link.rect, let image else { return }
                 self.linkPreview.show(image: image.image, size: CGSize(width: region.width * magnification, height: region.height * magnification),
@@ -412,7 +419,7 @@ final class DocumentViewController: NSViewController {
     func replace(with newSource: PDFSource, noticed: ContinuousClock.Instant = .now, markChanges: Bool = false) {
         cancelPendingReload()
         let newLayout = makeLayout(for: newSource)
-        let newView = DocumentView(source: newSource, layout: newLayout, dark: Self.wantsDark(override: darkOverride))
+        let newView = DocumentView(source: newSource, layout: newLayout, recolor: Self.recolor(darkOverride: darkOverride))
         let target = placement(of: currentState(), in: newLayout)
         let visible = CGRect(origin: target.origin,
                              size: CGSize(width: scrollView.contentSize.width / target.magnification,
@@ -684,8 +691,8 @@ final class DocumentViewController: NSViewController {
             jump(toRow: current - (atTop ? Int(n) : Int(n) - 1))
         case .firstPage: jump(toPage: (count ?? 1) - 1, recordingJump: true)
         case .goToPage: jump(toPage: count.map { $0 - 1 } ?? layout.pageCount - 1, recordingJump: true)
-        case .zoomIn: zoom(to: scrollView.magnification * pow(1.25, n))
-        case .zoomOut: zoom(to: scrollView.magnification / pow(1.25, n))
+        case .zoomIn: zoom(to: scrollView.magnification * pow(ConfigStore.shared.config.zoomStep, n))
+        case .zoomOut: zoom(to: scrollView.magnification / pow(ConfigStore.shared.config.zoomStep, n))
         case .zoomReset: zoom(to: 1)
         case .fitWidth: fitWidth(animated: true)
         case .fitPage: fitPage()
@@ -753,9 +760,9 @@ final class DocumentViewController: NSViewController {
         }
     }
 
-    /// `j`/`k` step: a tenth of the viewport.
+    /// `j`/`k` step: `scroll_step` of the viewport.
     private func smallStep(_ axis: Motion.Axis) -> CGFloat {
-        (axis == .vertical ? motion.viewport.height : motion.viewport.width) / 10
+        (axis == .vertical ? motion.viewport.height : motion.viewport.width) * ConfigStore.shared.config.scrollStep
     }
 
     private func rowAtTop() -> Int {

@@ -16,28 +16,29 @@ final class DocumentView: NSView {
 
     let source: PDFSource
     let layout: PageLayout
-    /// Pages are recoloured as dark paper.
-    let dark: Bool
+    /// Pages are recoloured as dark paper (nil in light mode).
+    let recolor: PaperRecolor?
+    var dark: Bool { recolor != nil }
 
     private var pages: [PageLayer] = []
     private var tiles: [TileKey: CALayer] = [:]
-    private lazy var scheduler = RenderScheduler(source: source, dark: dark) { [weak self] request, image in
+    private lazy var scheduler = RenderScheduler(source: source, recolor: recolor) { [weak self] request, image in
         self?.install(request, image)
     }
     private var currentLevel = 0
     /// Tiles still missing before `prepare`'s completion fires.
     private var readiness: (missing: Set<TileKey>, completion: () -> Void)?
 
-    init(source: PDFSource, layout: PageLayout, dark: Bool) {
+    init(source: PDFSource, layout: PageLayout, recolor: PaperRecolor?) {
         self.source = source
         self.layout = layout
-        self.dark = dark
+        self.recolor = recolor
         super.init(frame: CGRect(origin: .zero, size: layout.size))
         wantsLayer = true
         layerContentsRedrawPolicy = .never
         for (index, frame) in layout.pageFrames.enumerated() {
             let page = PageLayer(frame: frame, trim: layout.trims[index], pageSize: source.pageSizes[index],
-                                 paper: dark ? PaperRecolor.paperColor : .white)
+                                 paper: recolor?.paperColor ?? .white)
             layer!.addSublayer(page)
             pages.append(page)
         }

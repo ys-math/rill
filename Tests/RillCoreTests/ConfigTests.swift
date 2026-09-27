@@ -24,7 +24,11 @@ struct ConfigTests {
         change_markers = false
         spread = "book"
         trim = true
-        rounded_corners = true
+        rounded_corners = 10
+        scroll_step = 0.25
+        zoom_step = 1.5
+        dark_paper = "#1d2021"
+        dark_ink = "#EBDBB2"
         background = "glass"
         overlays = "glass"
         [keys]
@@ -43,7 +47,11 @@ struct ConfigTests {
         #expect(!config.changeMarkers)
         #expect(config.spread == .book)
         #expect(config.trim)
-        #expect(config.roundedCorners)
+        #expect(config.cornerRadius == 10)
+        #expect(config.scrollStep == 0.25)
+        #expect(config.zoomStep == 1.5)
+        #expect(config.darkPaper == RGBColor(red: 0x1d / 255.0, green: 0x20 / 255.0, blue: 0x21 / 255.0))
+        #expect(config.darkInk == RGBColor(red: 0xeb / 255.0, green: 0xdb / 255.0, blue: 0xb2 / 255.0))
         #expect(config.background == .glass)
         #expect(config.overlays == .glass)
         #expect(config.keymap["<C-f>"] == .screenDown)
@@ -62,6 +70,11 @@ struct ConfigTests {
         colour = "red"
         background = "frosted"
         overlays = 1
+        rounded_corners = "round"
+        scroll_step = 2
+        zoom_step = 1
+        dark_paper = "#fff"
+        dark_ink = 0.8
         [keys]
         "x" = "explode"
         "y" = 3
@@ -75,12 +88,34 @@ struct ConfigTests {
             #"[keys] y: expected an action name, got integer"#,
             #"[view] background: expected "solid", "blur" or "glass""#,
             #"[view] colour: unknown setting"#,
+            ##"[view] dark_ink: expected a colour like "#1d2021""##,
             #"[view] dark_mode: expected "system", "on" or "off""#,
+            ##"[view] dark_paper: expected a colour like "#1d2021""##,
             #"[view] default_zoom: expected "fit-width", "fit-page" or a number"#,
             #"[view] overlays: expected "blur" or "glass""#,
             #"[view] page_gap: expected a number from 0 to 100"#,
+            "[view] rounded_corners: expected true, false or a number from 0 to 100",
+            "[view] scroll_step: expected a number from 0.01 to 1",
+            "[view] zoom_step: expected a number from 1.01 to 4",
             "stray: settings belong in a [table]",
         ])
+    }
+
+    @Test func roundedCornersTakesABoolOrARadius() throws {
+        #expect(try Config.parse("[view]\nrounded_corners = true").config.cornerRadius == Config.defaultCornerRadius)
+        #expect(try Config.parse("[view]\nrounded_corners = false").config.cornerRadius == 0)
+        #expect(try Config.parse("[view]\nrounded_corners = 3.5").config.cornerRadius == 3.5)
+    }
+
+    @Test func defaultDarkColoursMatchTheirHex() throws {
+        let (config, warnings) = try Config.parse("[view]\ndark_paper = \"#242424\"\ndark_ink = \"#dbdbdb\"")
+        #expect(warnings.isEmpty)
+        #expect(config == Config())
+    }
+
+    @Test func hexColoursAreStrict() {
+        for bad in ["242424", "#24242", "#2424244", "#gggggg", "#+24242", "black"] { #expect(RGBColor(hex: bad) == nil) }
+        #expect(RGBColor(hex: "#ffffff") == RGBColor(red: 1, green: 1, blue: 1))
     }
 
     @Test func malformedTOMLThrows() {
