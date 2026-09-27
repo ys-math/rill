@@ -735,6 +735,7 @@ final class DocumentViewController: NSViewController {
         case .showCheatsheet: cheatsheet.show(keymap: ConfigStore.shared.config.keymap)
         case .closeDocument: view.window?.performClose(nil)
         case .openFile: onOpenFileRequested?()
+        case .editConfig: if let problem = ConfigStore.shared.edit() { toast.show(problem, for: .seconds(5)) }
         case .showOutline: showOutline()
         case .toggleSinglePage: toggleSinglePage()
         case .alternateFile: onAlternateRequested?()

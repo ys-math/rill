@@ -32,6 +32,8 @@ public struct Config: Equatable, Sendable {
     /// Bundle ID of the app to bring forward after inverse search (the terminal running Neovim).
     public var activateOnInverse: String? = "com.mitchellh.ghostty"
     public var activateOnForward = false
+    /// `edit_config`: a shell command with `%file` (quoted when substituted), or nil to open the file in the default app.
+    public var editCommand: String?
     public var defaultZoom = ZoomSetting.fitWidth
     public var darkMode = DarkMode.system
     public var pageGap: Double = 8
@@ -70,6 +72,45 @@ public struct Config: Equatable, Sendable {
         return base.appendingPathComponent("rill/config.toml")
     }
 
+    /// Written by `edit_config` when there's no config yet: every setting commented out, so
+    /// it parses to the defaults.
+    public static let template = """
+        # rill config: saving this file applies it. Every setting is optional; uncomment to change.
+
+        [config]
+        # edit_command = "open -na Ghostty --args -e nvim %file"   # how g, / ⌘, open this file
+
+        [view]
+        # default_zoom = "fit-width"   # "fit-page", or a number like 1.25
+        # dark_mode = "system"         # "on" | "off" | "system"
+        # page_gap = 8
+        # change_markers = true
+        # spread = "off"               # "pairs" | "book"
+        # trim = false
+        # rounded_corners = false      # true | a radius in page points
+        # scroll_step = 0.1
+        # zoom_step = 1.25
+        # dark_paper = "#242424"
+        # dark_ink = "#dbdbdb"
+        # background = "solid"         # "blur" | "glass"
+        # glass_style = "regular"      # "clear": a more see-through glass background
+        # glass_tint = "#00000026"     # tint the glass background ("#rrggbb" or "#rrggbbaa")
+        # overlays = "blur"            # "glass"
+
+        [synctex]
+        # inverse_command = "nvim --headless -c \\"VimtexInverseSearch %line '%file'\\""
+        # activate_on_inverse = "com.mitchellh.ghostty"
+        # activate_on_forward = false
+
+        [picker]
+        # roots = ["~/github", "~/Papers"]
+
+        [keys]
+        # key sequence = action name, as listed by g? ("nop" removes a default binding)
+        # "<C-f>" = "screen_down"
+
+        """
+
     /// The config in `text`, plus warnings for anything ignored. Throws only if the TOML itself is malformed.
     public static func parse(_ text: String) throws(TOMLError) -> (config: Config, warnings: [String]) {
         let document = try TOML.parse(text)
@@ -93,6 +134,15 @@ public struct Config: Equatable, Sendable {
                         else { warnWrongType(table, key, expected: "an array of strings", got: value); continue }
                         config.pickerRoots = roots
                     default: warnings.append("[picker] \(key): unknown setting")
+                    }
+                }
+            case "config":
+                for (key, value) in entries {
+                    switch key {
+                    case "edit_command":
+                        guard let s = value.string else { warnWrongType(table, key, expected: "a command", got: value); continue }
+                        config.editCommand = s.isEmpty ? nil : s
+                    default: warnings.append("[config] \(key): unknown setting")
                     }
                 }
             case "synctex":
@@ -207,6 +257,13 @@ public struct Config: Equatable, Sendable {
             }
         }
         return (config, warnings.sorted())
+    }
+}
+
+extension Config {
+    /// `edit_command` with `%file` replaced by `path`, quoted for the shell; nil if there's no command.
+    public func renderedEditCommand(path: String) -> String? {
+        editCommand?.replacingOccurrences(of: "%file", with: "'" + path.replacingOccurrences(of: "'", with: #"'\''"#) + "'")
     }
 }
 

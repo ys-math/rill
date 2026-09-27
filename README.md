@@ -153,6 +153,7 @@ Compile with SyncTeX enabled (vimtex's latexmk defaults already pass `-synctex=1
 | `⌘⇧O` | Open with the standard macOS panel |
 | `⌃^` / `⌃6` | Previous PDF: its window if open, otherwise it replaces this one (press again to toggle back) |
 | `g?` | Cheatsheet of every binding (including your remaps) |
+| `g,` / `⌘,` | Edit the config (changes apply when you save) |
 | `q` | Close the document |
 | `r` | Reload |
 | `g!` | Frame-rate overlay |
@@ -165,12 +166,16 @@ for inverse search. After a recompile, a brief bar in the left margin marks what
 
 ## Config
 
-`~/.config/rill/config.toml` (or `$XDG_CONFIG_HOME/rill/config.toml`). Every setting is optional,
-and changes apply as soon as you save. Mistakes show up as a message in the window; a setting
+`~/.config/rill/config.toml` (or `$XDG_CONFIG_HOME/rill/config.toml`). `g,` or `⌘,` opens it with
+`[config] edit_command`, or without one in the app your Mac uses for `.toml` files (or your default
+text editor), creating a commented starter file if there's none yet. Every setting is optional, and changes apply as soon as you save. Mistakes show up as a message in the window; a setting
 with a bad value keeps its default, and a file that doesn't parse leaves the previous settings in
 place.
 
 ```toml
+[config]
+edit_command = "open -na Ghostty --args -e nvim %file"   # how g, / ⌘, open this file; %file is quoted for you
+
 [view]
 default_zoom = "fit-width"   # "fit-page", or a number like 1.25 (for documents opened the first time)
 dark_mode = "system"         # "on" | "off" | "system" (follow macOS)
@@ -213,7 +218,7 @@ Key notation follows Vim: `<C-d>` (control), `<M-x>` (option), `<S-Space>` (shif
 `hint_inverse_search`, `hint_yank_line`, `toggle_dark_mode`, `toggle_status`, `show_cheatsheet`,
 `close_document`, `open_file`, `show_outline`, `toggle_single_page`, `alternate_file`,
 `hint_preview_link`, `visual_mode`, `visual_line_mode`, `toggle_spread`, `toggle_trim`, `reload`,
-`toggle_frame_hud`.
+`toggle_frame_hud`, `edit_config`.
 
 In the pickers, type to filter (fuzzy, smart-case), `↑`/`↓` or `⌃p`/`⌃n` to move, `Enter` to
 open, `Esc` to close. PDFs with the same name are shown with the folders that tell them apart
