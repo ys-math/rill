@@ -27,6 +27,7 @@ enum DebugSnapshot {
             try? await Task.sleep(for: .seconds(delay))
             let state = document.currentState()
             log += "final: pages=\(document.source.pageCount) page=\(state.position.page) offset=\(state.position.offset)\n"
+            log += "final status: \(document.debugStatus)\n"
             try? log.write(toFile: path + ".txt", atomically: true, encoding: .utf8)
             write(window: window, to: URL(fileURLWithPath: path))
             NSApp.terminate(nil)
@@ -42,6 +43,7 @@ enum DebugSnapshot {
         "<Esc>": (53, "\u{1B}", "\u{1B}", []),
         "<CR>": (36, "\r", "\r", []),
         "<BS>": (51, "\u{7F}", "\u{7F}", []),
+        "<S-Down>": (125, "\u{F701}", "\u{F701}", [.function, .numericPad, .shift]),
         "<C-o>": (31, "\u{0F}", "o", [.control]),
         "<C-i>": (34, "\t", "i", [.control]),
     ]
@@ -54,11 +56,12 @@ enum DebugSnapshot {
             (code, characters, unmodified, flags) = named
         } else {
             let keyCodes: [Character: UInt16] = ["j": 38, "k": 40, "d": 2, "u": 32, "g": 5, "+": 24, "-": 27, "w": 13, "z": 6,
-                                                 "/": 44, "?": 44, "n": 45, "m": 46, "'": 39, "f": 3, "y": 16, "a": 0, "s": 1]
+                                                 "/": 44, "?": 44, "n": 45, "m": 46, "'": 39, "f": 3, "y": 16, "a": 0, "s": 1,
+                                                 "i": 34, ".": 47, "!": 18, "q": 12]
             let c = Character(token)
             code = keyCodes[Character(c.lowercased())] ?? 0
             (characters, unmodified) = (token, token)
-            flags = c.isUppercase || "+?".contains(c) ? [.shift] : []
+            flags = c.isUppercase || "+?!".contains(c) ? [.shift] : []
         }
         for type in [NSEvent.EventType.keyDown, .keyUp] {
             if let event = NSEvent.keyEvent(

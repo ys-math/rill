@@ -73,6 +73,14 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate {
         return await documentController.forwardSearch(location)
     }
 
+    /// Shows a message in this window. Returns false if there's no document to show it in.
+    @discardableResult
+    func showToast(_ message: String) -> Bool {
+        guard let documentController, documentController.isViewLoaded else { return false }
+        documentController.showToast(message)
+        return true
+    }
+
     /// Records where the document is scrolled to. The store is written to disk by the app delegate.
     func saveState() {
         guard let url, let documentController, documentController.isViewLoaded else { return }

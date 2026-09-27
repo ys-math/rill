@@ -115,6 +115,15 @@ struct KeyResolverTests {
         #expect(r.feed("z") == .action(.fitPage, count: nil))
     }
 
+    @Test func displaysBindingsMacStyle() {
+        #expect(KeyMap.display("<C-d>") == "⌃d")
+        #expect(KeyMap.display("<S-Space>") == "⇧Space")
+        #expect(KeyMap.display("<Down>") == "↓")
+        #expect(KeyMap.display("<C-S-Down>") == "⌃⇧↓")
+        #expect(KeyMap.display("g?") == "g?")
+        #expect(KeyMap.display("<Esc>") == "Esc")
+    }
+
     @Test func tokenizesBindings() {
         #expect(KeyMap.tokens(of: "g<C-d>x") == ["g", "<C-d>", "x"])
         #expect(KeyMap.tokens(of: "<") == ["<"])
