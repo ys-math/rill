@@ -4,7 +4,7 @@ APPS_DIR   ?= /Applications
 BIN_DIR    ?= $(HOME)/.local/bin
 LSREGISTER := /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
 
-.PHONY: all build test icon app install uninstall run clean
+.PHONY: all build test app install uninstall run clean
 
 all: app
 
@@ -14,19 +14,18 @@ build:
 test:
 	swift test
 
-# Redraw Resources/Rill.icns from scripts/make-icon.swift. The icns is checked in, so a
-# normal build doesn't need this.
-icon:
-	swift scripts/make-icon.swift Resources/Rill.icns
-
 # Assemble Rill.app from the SwiftPM products. The CLI ships inside the bundle so the
-# installed symlink always matches the installed app.
+# installed symlink always matches the installed app. actool compiles the Icon Composer
+# icon into Assets.car (the Liquid Glass icon) plus a flat Rill.icns fallback.
 app: build
 	$(eval BIN := $(shell swift build -c $(CONFIG) --show-bin-path))
 	rm -rf $(APP)
 	mkdir -p $(APP)/Contents/MacOS $(APP)/Contents/Resources
 	cp Resources/Info.plist $(APP)/Contents/Info.plist
-	cp Resources/Rill.icns $(APP)/Contents/Resources/
+	xcrun actool Resources/Rill.icon --compile $(APP)/Contents/Resources \
+		--platform macosx --minimum-deployment-target 26.0 --app-icon Rill \
+		--output-partial-info-plist build/icon-info.plist \
+		--output-format human-readable-text --errors --warnings
 	cp $(BIN)/RillApp $(BIN)/rill $(APP)/Contents/MacOS/
 	codesign --force --sign - $(APP)
 

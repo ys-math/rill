@@ -10,6 +10,8 @@
 	<string>rill</string>
 	<key>CFBundleIconFile</key>
 	<string>Rill</string>
+	<key>CFBundleIconName</key>
+	<string>Rill</string>
 	<key>CFBundleExecutable</key>
 	<string>RillApp</string>
 	<key>CFBundlePackageType</key>
