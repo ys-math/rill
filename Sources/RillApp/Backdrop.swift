@@ -12,7 +12,7 @@ final class Backdrop: NSView {
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
     /// Switches to `background`, making `window` see-through (or opaque again) to match.
-    func apply(_ background: Config.Background, scrollView: NSScrollView, window: NSWindow?) {
+    func apply(_ background: Config.Background, scrollView: NSScrollView? = nil, window: NSWindow?) {
         if background != self.background || (material == nil && background != .solid) {
             self.background = background
             material?.removeFromSuperview()
@@ -23,8 +23,18 @@ final class Backdrop: NSView {
                 addSubview(material)
             }
         }
-        scrollView.drawsBackground = background == .solid
-        guard let window else { return }
+        scrollView?.drawsBackground = background == .solid
+        if let window { updateWindow(window) }
+    }
+
+    // A document swapped into a window already on screen appears before it's in the window,
+    // so `apply` gets no window then; catch up once it arrives.
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if let window { updateWindow(window) }
+    }
+
+    private func updateWindow(_ window: NSWindow) {
         window.isOpaque = background == .solid
         window.backgroundColor = background == .solid ? .windowBackgroundColor : .clear
     }
