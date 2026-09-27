@@ -29,6 +29,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate {
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
         window.tabbingMode = .preferred
+        window.hideTrafficLightsUntilHover()
         window.center()
         super.init(window: window)
         window.delegate = self
@@ -204,6 +205,36 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate {
 /// before it can reach the window controller.
 final class DocumentWindow: NSWindow {
     var onEscape: (() -> Void)?
+
+    private var trafficLights: [NSButton] {
+        [.closeButton, .miniaturizeButton, .zoomButton].compactMap { standardWindowButton($0) }
+    }
+
+    /// Minimal chrome: the close/minimize/zoom buttons stay invisible until the pointer is in
+    /// the title bar strip, like a full-screen app's.
+    func hideTrafficLightsUntilHover() {
+        guard let titlebar = standardWindowButton(.closeButton)?.superview else { return }
+        for button in trafficLights { button.alphaValue = 0 }
+        titlebar.addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+                                                owner: self, userInfo: nil))
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        setTrafficLights(visible: true)
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        setTrafficLights(visible: false)
+    }
+
+    private func setTrafficLights(visible: Bool) {
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0 : 0.15
+            for button in trafficLights { button.animator().alphaValue = visible ? 1 : 0 }
+        }
+    }
+
+    var debugTrafficLightAlpha: CGFloat { trafficLights.first?.alphaValue ?? -1 }
 
     override func cancelOperation(_ sender: Any?) {
         if let onEscape { onEscape() } else { super.cancelOperation(sender) }

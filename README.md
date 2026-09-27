@@ -45,6 +45,7 @@ Compile with SyncTeX enabled (vimtex's latexmk defaults already pass `-synctex=1
 | `gg` / `G` / `{n}G` | First / last / page n |
 | `+` / `-` / `=` | Zoom in / out / 100% |
 | `w` / `z` | Fit width / fit page |
+| `s` | One page at a time ↔ continuous (at a page's edge, `j`/`Space` turn the page) |
 | `/` / `?` | Search forward / backward (smart-case; `Enter` accepts, `Esc` returns) |
 | `n` / `N` | Next / previous match |
 | `Esc` | Clear search highlights |
@@ -102,7 +103,7 @@ Key notation follows Vim: `<C-d>` (control), `<M-x>` (option), `<S-Space>` (shif
 `fit_width`, `fit_page`, `jump_back`, `jump_forward`, `set_mark`, `goto_mark`, `search_forward`,
 `search_backward`, `search_next`, `search_previous`, `clear_highlights`, `hint_follow_link`,
 `hint_inverse_search`, `hint_yank_line`, `toggle_dark_mode`, `toggle_status`, `show_cheatsheet`,
-`close_document`, `open_file`, `show_outline`, `reload`, `toggle_frame_hud`.
+`close_document`, `open_file`, `show_outline`, `toggle_single_page`, `reload`, `toggle_frame_hud`.
 
 In the pickers, type to filter (fuzzy, smart-case), `↑`/`↓` or `⌃p`/`⌃n` to move, `Enter` to
 open, `Esc` to close. Launching rill from the Dock or Spotlight with nothing open shows the

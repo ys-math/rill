@@ -30,6 +30,7 @@ enum DebugSnapshot {
             let state = document.currentState()
             log += "final: pages=\(document.source.pageCount) page=\(state.position.page) offset=\(state.position.offset)\n"
             log += "final status: \(document.debugStatus)\n"
+            log += "traffic lights alpha: \((window as? DocumentWindow)?.debugTrafficLightAlpha ?? -1)\n"
             try? log.write(toFile: path + ".txt", atomically: true, encoding: .utf8)
             write(window: window, to: URL(fileURLWithPath: path))
             NSApp.terminate(nil)
@@ -43,6 +44,8 @@ enum DebugSnapshot {
         "<Down>": (125, "\u{F701}", "\u{F701}", [.function, .numericPad]),
         "<Up>": (126, "\u{F700}", "\u{F700}", [.function, .numericPad]),
         "<Esc>": (53, "\u{1B}", "\u{1B}", []),
+        "<Space>": (49, " ", " ", []),
+        "<S-Space>": (49, " ", " ", [.shift]),
         "<CR>": (36, "\r", "\r", []),
         "<BS>": (51, "\u{7F}", "\u{7F}", []),
         "<S-Down>": (125, "\u{F701}", "\u{F701}", [.function, .numericPad, .shift]),
@@ -56,6 +59,8 @@ enum DebugSnapshot {
         let (code, characters, unmodified, flags): (UInt16, String, String, NSEvent.ModifierFlags)
         if let named = namedKeys[token] {
             (code, characters, unmodified, flags) = named
+        } else if token.count != 1 {
+            return // a named key this hook doesn't know how to post
         } else {
             let keyCodes: [Character: UInt16] = ["j": 38, "k": 40, "d": 2, "u": 32, "g": 5, "+": 24, "-": 27, "w": 13, "z": 6,
                                                  "/": 44, "?": 44, "n": 45, "m": 46, "'": 39, "f": 3, "y": 16, "a": 0, "s": 1,

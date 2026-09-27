@@ -42,6 +42,8 @@ final class DocumentViewController: NSViewController {
     /// `i` overrides the config's dark mode for this window.
     private var darkOverride: Bool?
     private var appearanceObservation: NSKeyValueObservation?
+    /// Single-page mode (`s`): the one page shown. Nil when scrolling continuously.
+    private var singlePage: Int?
     private let hints = HintController()
     private var jumps = JumpList<PagePosition>(isSame: { a, b in a.page == b.page && abs(a.offset - b.offset) < 0.02 })
     private var marks: [String: PagePosition]
@@ -215,7 +217,7 @@ final class DocumentViewController: NSViewController {
         guard !inView else { return false }
         if recordingJump { jumps.record(currentPosition()) }
         documentView.ensureThumbnails(page...page + 1)
-        motion.jump(toY: target.minY - visible.height / 3)
+        goY(target.minY - visible.height / 3)
         return true
     }
 
@@ -301,6 +303,7 @@ final class DocumentViewController: NSViewController {
         textIndexCache = nil
         hints.cancel()
         search.documentChanged()
+        applySinglePage()
         pill.flash()
         if let boxes = pendingReveal { reveal(boxes) }
         reloadLog.debug("swapped in \((ContinuousClock.now - noticed).formatted(.units(allowed: [.milliseconds])), privacy: .public) after the change")
@@ -377,7 +380,7 @@ final class DocumentViewController: NSViewController {
     var debugStatus: String {
         let p = currentPosition()
         return "page=\(p.page + 1) offset=\(String(format: "%.3f", p.offset)) x=\(Int(motion.origin.x)) "
-            + "dark=\(documentView.dark) gap=\(Int(layout.gap)) pill=\(pill.debugText.isEmpty ? "-" : pill.debugText) "
+            + "single=\(singlePage.map { "\($0 + 1)" } ?? "-") dark=\(documentView.dark) gap=\(Int(layout.gap)) pill=\(pill.debugText.isEmpty ? "-" : pill.debugText) "
             + "cheatsheet=\(cheatsheet.isShowing) toast=\(toast.debugMessage.isEmpty ? "-" : toast.debugMessage) hints=\(hints.debugCount) search=\(search.debugStatus) marks=\(marks.keys.sorted().joined()) jumps=\(jumps.count) "
             + "pasteboard=\(NSPasteboard.general.string(forType: .string)?.prefix(30) ?? "") "
             + "outline=\(outlinePicker.isShowing ? outlinePicker.debugSummary : "-")"
@@ -417,6 +420,9 @@ final class DocumentViewController: NSViewController {
     }
 
     private func beginContinuous(_ action: Action, keyCode: UInt16) {
+        // Single-page mode: at the page's edge, the key turns the page instead of pressing on.
+        if action == .scrollDown, turnsPage(forward: true) { return turnPage(by: 1) }
+        if action == .scrollUp, turnsPage(forward: false) { return turnPage(by: -1) }
         continuousKey = keyCode
         let (axis, direction): (Motion.Axis, CGFloat) = switch action {
         case .scrollDown: (.vertical, 1)
@@ -435,6 +441,9 @@ final class DocumentViewController: NSViewController {
         if action.category == .jump || action.category == .zoom, action != .toggleStatus, action != .toggleDarkMode, action != .setMark {
             pill.flash()
         }
+        // Single-page mode: scrolling on past the page's edge turns the page.
+        if [.scrollDown, .halfPageDown, .screenDown].contains(action), turnsPage(forward: true) { return turnPage(by: 1) }
+        if [.scrollUp, .halfPageUp, .screenUp].contains(action), turnsPage(forward: false) { return turnPage(by: -1) }
         switch action {
         case .scrollDown: motion.scroll(by: n * smallStep(.vertical), axis: .vertical)
         case .scrollUp: motion.scroll(by: -n * smallStep(.vertical), axis: .vertical)
@@ -494,6 +503,7 @@ final class DocumentViewController: NSViewController {
         case .closeDocument: view.window?.performClose(nil)
         case .openFile: onOpenFileRequested?()
         case .showOutline: showOutline()
+        case .toggleSinglePage: toggleSinglePage()
         }
     }
 
@@ -513,7 +523,7 @@ final class DocumentViewController: NSViewController {
         let y = layout.topOffset(ofPage: page)
         let pagesInView = max(Int((motion.viewport.height / (layout.pageFrames[page].height + layout.gap)).rounded(.up)), 1)
         documentView.ensureThumbnails(page...(page + pagesInView))
-        motion.jump(toY: y)
+        goY(y)
     }
 
     func currentPosition() -> PagePosition {
@@ -547,17 +557,83 @@ final class DocumentViewController: NSViewController {
         pill.flash()
         if let point = entry.point {
             documentView.ensureThumbnails(entry.page...entry.page + 1)
-            motion.jump(toY: layout.pageFrames[entry.page].minY + point.y - motion.viewport.height * 0.05)
+            goY(layout.pageFrames[entry.page].minY + point.y - motion.viewport.height * 0.05)
         } else {
             jump(toPage: entry.page)
         }
+    }
+
+    // MARK: - Single page
+
+    /// Every programmatic jump goes through here, so single-page mode can turn to the page
+    /// the target is on first. `y` is the viewport's new top edge.
+    private func goY(_ y: CGFloat) {
+        guard singlePage != nil else { return motion.jump(toY: y) }
+        // The page the viewer will be looking at: a third of the way down the viewport.
+        let page = layout.pageIndex(atY: y + motion.viewport.height / 3)
+        if page == singlePage {
+            motion.jump(toY: y)
+        } else {
+            singlePage = page
+            applySinglePage()
+            motion.cut(toY: y)
+        }
+    }
+
+    private func toggleSinglePage() {
+        if singlePage == nil {
+            singlePage = layout.pageIndex(atY: motion.origin.y + motion.viewport.height / 2)
+            applySinglePage()
+            fitPage()
+            toast.show("single page")
+        } else {
+            singlePage = nil
+            applySinglePage()
+            toast.show("continuous")
+        }
+    }
+
+    /// Restricts scrolling and drawing to the current page (or lifts the restriction).
+    private func applySinglePage() {
+        let clip = scrollView.contentView as? CenteringClipView
+        guard let page = singlePage.map({ min(max($0, 0), layout.pageCount - 1) }) else {
+            clip?.allowedRect = nil
+            motion.ySpan = nil
+            documentView.showOnly(page: nil)
+            return
+        }
+        singlePage = page
+        let frame = layout.pageFrames[page]
+        let area = CGRect(x: 0, y: frame.minY - layout.gap / 2, width: layout.size.width, height: frame.height + layout.gap)
+        clip?.allowedRect = area
+        motion.ySpan = area.minY...area.maxY
+        documentView.showOnly(page: page)
+    }
+
+    /// In single-page mode, a scroll that would go past the page's edge turns the page instead.
+    private func turnsPage(forward: Bool) -> Bool {
+        guard singlePage != nil, let limit = motion.yLimit else { return false }
+        return forward ? motion.origin.y >= limit.upperBound - 1 : motion.origin.y <= limit.lowerBound + 1
+    }
+
+    private func turnPage(by delta: Int) {
+        guard let page = singlePage else { return }
+        let target = page + delta
+        guard (0..<layout.pageCount).contains(target) else { return NSSound.beep() }
+        pill.flash()
+        let frame = layout.pageFrames[target]
+        // Forward lands on the new page's top; backward on its bottom, as if scrolling on.
+        let y = delta > 0 ? frame.minY - layout.gap / 2 : frame.maxY + layout.gap / 2 - motion.viewport.height
+        singlePage = target
+        applySinglePage()
+        motion.cut(toY: y)
     }
 
     /// Scroll to a remembered position (marks, jump list).
     private func go(to position: PagePosition) {
         let page = min(max(position.page, 0), layout.pageCount - 1)
         documentView.ensureThumbnails(page...page + 1)
-        motion.jump(toY: layout.y(for: position))
+        goY(layout.y(for: position))
     }
 
     private func zoom(to magnification: CGFloat) {
@@ -597,6 +673,7 @@ final class DocumentViewController: NSViewController {
     private func viewportDidResize() {
         guard didInitialLayout else { return }
         hints.cancel()
+        applySinglePage()
         switch zoomMode {
         case .fitWidth: fitWidth(animated: false)
         case .fitPage, .custom: refresh(settled: true)
@@ -682,7 +759,7 @@ extension DocumentViewController: SearchHost, HintHost {
                     // A little context above the destination (usually a heading or equation).
                     let top = layout.pageFrames[index].minY + point.y - motion.viewport.height * 0.05
                     documentView.ensureThumbnails(index...index + 1)
-                    motion.jump(toY: top)
+                    goY(top)
                 } else {
                     jump(toPage: index)
                 }

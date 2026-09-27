@@ -141,6 +141,14 @@ final class DocumentView: NSView {
         CATransaction.commit()
     }
 
+    /// Single-page mode: hide every page but `page` (nil shows them all).
+    func showOnly(page: Int?) {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        for (index, layer) in pages.enumerated() { layer.isHidden = page.map { $0 != index } ?? false }
+        CATransaction.commit()
+    }
+
     /// Search highlights: every match, and the current one more strongly.
     func setHighlights(_ matches: [SearchMatch], current: Int?) {
         CATransaction.begin()
@@ -168,6 +176,7 @@ final class DocumentView: NSView {
         CATransaction.setDisableActions(true)
         defer { CATransaction.commit() }
 
+        LaunchTiming.firstPixels(sharp: { if case .tile = request { true } else { false } }())
         switch request {
         case .thumbnail(let index):
             pages[index].setThumbnail(image)
