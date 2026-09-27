@@ -9,11 +9,71 @@ pickers.
 
 ## Install
 
-Requires macOS 26+ and Xcode.
+### Requirements
+
+- macOS 26 or later
+- Xcode 26 or later
+
+rill is built from source; there's no prebuilt download.
+
+### Build and install
 
 ```sh
-make install   # builds Rill.app into /Applications and links the `rill` CLI into ~/.local/bin
+git clone https://github.com/ys-math/rill.git
+cd rill
+make install
 ```
+
+This puts:
+
+- `Rill.app` in `/Applications` (ad-hoc signed and registered with Launch Services), and
+- `~/.local/bin/rill`, a symlink to the CLI inside the app, so the CLI always matches the
+  installed app.
+
+### Add rill to your PATH
+
+If `~/.local/bin` isn't on your `PATH` yet, add this to `~/.zshrc` and open a new terminal:
+
+```sh
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+vimtex runs `rill` by name, so forward search needs it on the `PATH` Neovim sees.
+
+### Check it works
+
+```sh
+rill path/to/some.pdf
+```
+
+Rill starts (if it isn't running) and opens the PDF.
+
+### Update
+
+```sh
+git pull
+make install
+```
+
+Then quit and relaunch Rill to pick up the new build.
+
+### Custom locations
+
+```sh
+make install APPS_DIR=~/Applications BIN_DIR=~/bin
+```
+
+Pass the same variables to `make uninstall`.
+
+### Uninstall
+
+```sh
+make uninstall
+```
+
+This removes `Rill.app` and the `rill` symlink. Your config (`~/.config/rill/`) and rill's
+support folder (`~/Library/Application Support/rill/`) stay; delete them by hand for a full
+cleanup.
 
 ## Use with vimtex
 
@@ -35,36 +95,63 @@ Compile with SyncTeX enabled (vimtex's latexmk defaults already pass `-synctex=1
 
 ## Keys
 
+### Scroll
+
 | Key | Action |
 |---|---|
 | `j` / `k`, `↓` / `↑` (hold to scroll) | Scroll down / up |
 | `h` / `l`, `←` / `→` | Scroll left / right |
 | `d` / `u`, `⌃d` / `⌃u` | Half screen down / up |
 | `Space` / `⇧Space` | Screen down / up |
+
+### Jump
+
+| Key | Action |
+|---|---|
 | `J` / `K` | Next / previous page |
 | `gg` / `G` / `{n}G` | First / last / page n |
+| `⌃o` / `⌃i` | Jump back / forward |
+| `m{a-z}` / `'{a-z}` | Set / go to a mark (saved per document) |
+| `''` | Back to where the last jump started |
+| `t` | Go to a section (the PDF's outline) |
+
+### Zoom & view
+
+| Key | Action |
+|---|---|
 | `+` / `-` / `=` | Zoom in / out / 100% |
 | `w` / `z` | Fit width / fit page |
 | `s` | One page at a time ↔ continuous (at a page's edge, `j`/`Space` turn the page) |
 | `S` | Two-page spread: pairs (1–2, 3–4, …) → book style (1, 2–3, …) → one page per row |
 | `c` | Trim the white margins (measured per document; odd and even pages trimmed separately) |
+| `i` | Dark mode on / off |
+| `g.` | Keep the page / zoom status visible |
+
+### Search
+
+| Key | Action |
+|---|---|
 | `/` / `?` | Search forward / backward (smart-case; `Enter` accepts, `Esc` returns) |
 | `n` / `N` | Next / previous match |
 | `Esc` | Clear search highlights |
+
+### Hints
+
+| Key | Action |
+|---|---|
 | `f` | Follow a link (labels appear; type one) |
 | `F` | Inverse search on a line: jump Neovim to its source |
 | `yf` | Copy a line |
 | `p` | Preview a link's target (theorem, equation, citation) without leaving your place; `Enter` follows it |
 | `v` / `V` | Visual mode: pick a line, then select with `h l w b e j k 0 $` (counts work), `o` swaps ends, `y` copies, `Esc` cancels. `V` selects whole lines |
-| `⌃o` / `⌃i` | Jump back / forward |
-| `m{a-z}` / `'{a-z}` | Set / go to a mark (saved per document) |
-| `''` | Back to where the last jump started |
+
+### Other
+
+| Key | Action |
+|---|---|
 | `o` / `⌘O` | Open a PDF: recent files, then PDFs under `[picker] roots` |
 | `⌘⇧O` | Open with the standard macOS panel |
 | `⌃^` / `⌃6` | Previous PDF: its window if open, otherwise it replaces this one (press again to toggle back) |
-| `t` | Go to a section (the PDF's outline) |
-| `i` | Dark mode on / off |
-| `g.` | Keep the page / zoom status visible |
 | `g?` | Cheatsheet of every binding (including your remaps) |
 | `q` | Close the document |
 | `r` | Reload |
@@ -91,7 +178,11 @@ page_gap = 8                 # points between pages
 change_markers = true        # mark changed lines in the margin after a recompile
 spread = "off"               # "pairs" (1–2, 3–4, …) | "book" (1, 2–3, …): two pages per row
 trim = false                 # cut away the white margins around the text
-rounded_corners = false      # round the corners of the pages
+rounded_corners = false      # true (6) | a radius in page points: round the corners of the pages
+scroll_step = 0.1            # j/k/h/l: fraction of the window to scroll (0.01–1)
+zoom_step = 1.25             # +/-: zoom multiplier (1.01–4)
+dark_paper = "#242424"       # page colour in dark mode ("#rrggbb")
+dark_ink = "#dbdbdb"         # text colour in dark mode ("#rrggbb")
 background = "solid"         # "blur" (the desktop, blurred) | "glass" (Liquid Glass): around the pages
 overlays = "blur"            # "glass": Liquid Glass for the search bar, status, toasts, picker, cheatsheet
 

@@ -37,13 +37,23 @@ public struct Config: Equatable, Sendable {
     /// Cut away the white margins around the text.
     public var trim = false
     public var background = Background.solid
-    /// Round the corners of the pages.
-    public var roundedCorners = false
+    /// Corner radius of the pages in page points (0 for square corners).
+    public var cornerRadius: Double = 0
+    /// `j`/`k`/`h`/`l`: a fraction of the viewport.
+    public var scrollStep: Double = 0.1
+    /// `+`/`-`: the zoom multiplier.
+    public var zoomStep: Double = 1.25
+    /// Dark mode's page and text colours.
+    public var darkPaper = RGBColor(hex: "#242424")!
+    public var darkInk = RGBColor(hex: "#dbdbdb")!
     public var overlays = OverlayStyle.blur
     /// The effective bindings: defaults with the `[keys]` table applied.
     public var keymap: [String: Action] = KeyMap.defaults
 
     public init() {}
+
+    /// The radius `rounded_corners = true` gives.
+    public static let defaultCornerRadius: Double = 6
 
     /// `$XDG_CONFIG_HOME/rill/config.toml`, else `~/.config/rill/config.toml`.
     public static func defaultURL(environment: [String: String] = ProcessInfo.processInfo.environment) -> URL {
@@ -122,8 +132,28 @@ public struct Config: Equatable, Sendable {
                         guard let b = value.bool else { warnWrongType(table, key, expected: "true or false", got: value); continue }
                         config.trim = b
                     case "rounded_corners":
-                        guard let b = value.bool else { warnWrongType(table, key, expected: "true or false", got: value); continue }
-                        config.roundedCorners = b
+                        if let b = value.bool {
+                            config.cornerRadius = b ? Config.defaultCornerRadius : 0
+                        } else if let radius = value.number, (0...100).contains(radius) {
+                            config.cornerRadius = radius
+                        } else {
+                            warnings.append("[view] rounded_corners: expected true, false or a number from 0 to 100"); continue
+                        }
+                    case "scroll_step":
+                        guard let step = value.number, (0.01...1).contains(step) else {
+                            warnings.append("[view] scroll_step: expected a number from 0.01 to 1"); continue
+                        }
+                        config.scrollStep = step
+                    case "zoom_step":
+                        guard let step = value.number, (1.01...4).contains(step) else {
+                            warnings.append("[view] zoom_step: expected a number from 1.01 to 4"); continue
+                        }
+                        config.zoomStep = step
+                    case "dark_paper", "dark_ink":
+                        guard let s = value.string, let color = RGBColor(hex: s) else {
+                            warnings.append(##"[view] \##(key): expected a colour like "#1d2021""##); continue
+                        }
+                        if key == "dark_paper" { config.darkPaper = color } else { config.darkInk = color }
                     case "background":
                         guard let s = value.string, let background = Background(rawValue: s) else {
                             warnings.append(#"[view] background: expected "solid", "blur" or "glass""#); continue
@@ -159,5 +189,23 @@ public struct Config: Equatable, Sendable {
             }
         }
         return (config, warnings.sorted())
+    }
+}
+
+/// An sRGB colour, components 0–1.
+public struct RGBColor: Equatable, Sendable {
+    public var red, green, blue: Double
+
+    public init(red: Double, green: Double, blue: Double) {
+        (self.red, self.green, self.blue) = (red, green, blue)
+    }
+
+    /// `#rrggbb`; nil for anything else.
+    public init?(hex: String) {
+        guard hex.count == 7, hex.first == "#", let value = UInt32(hex.dropFirst(), radix: 16),
+              hex.dropFirst().allSatisfy(\.isHexDigit)
+        else { return nil }
+        self.init(red: Double(value >> 16 & 0xff) / 255, green: Double(value >> 8 & 0xff) / 255,
+                  blue: Double(value & 0xff) / 255)
     }
 }

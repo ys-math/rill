@@ -16,7 +16,7 @@ final class RenderScheduler {
 
     private let source: PDFSource
     /// Recolour everything for dark mode.
-    private let dark: Bool
+    private let recolor: PaperRecolor?
     private let queue: OperationQueue = {
         let q = OperationQueue()
         q.name = "rill.render"
@@ -27,9 +27,9 @@ final class RenderScheduler {
     private var inFlight: [RenderRequest: Operation] = [:]
     private let deliver: @MainActor (RenderRequest, CGImage) -> Void
 
-    init(source: PDFSource, dark: Bool, deliver: @escaping @MainActor (RenderRequest, CGImage) -> Void) {
+    init(source: PDFSource, recolor: PaperRecolor?, deliver: @escaping @MainActor (RenderRequest, CGImage) -> Void) {
         self.source = source
-        self.dark = dark
+        self.recolor = recolor
         self.deliver = deliver
     }
 
@@ -55,7 +55,7 @@ final class RenderScheduler {
     /// Renders synchronously on the calling thread. For the rare case where showing
     /// nothing for a frame is worse than a few ms of main-thread work.
     func renderNow(_ request: RenderRequest) -> CGImage? {
-        Self.render(request, source: source, dark: dark)
+        Self.render(request, source: source, recolor: recolor)
     }
 
     func cancelAll() {
@@ -65,10 +65,10 @@ final class RenderScheduler {
 
     private func enqueue(_ request: RenderRequest, priority: Priority) {
         let source = source
-        let dark = dark
+        let recolor = recolor
         let op = BlockOperation()
         op.addExecutionBlock { [weak op] in
-            guard let op, !op.isCancelled, let image = Self.render(request, source: source, dark: dark) else { return }
+            guard let op, !op.isCancelled, let image = Self.render(request, source: source, recolor: recolor) else { return }
             let box = UncheckedImage(image)
             DispatchQueue.main.async {
                 MainActor.assumeIsolated { [weak self] in
@@ -92,9 +92,10 @@ final class RenderScheduler {
         }
     }
 
-    nonisolated private static func render(_ request: RenderRequest, source: PDFSource, dark: Bool) -> CGImage? {
+    nonisolated private static func render(_ request: RenderRequest, source: PDFSource, recolor: PaperRecolor?) -> CGImage? {
         let image = renderPlain(request, source: source)
-        return dark ? image.flatMap(PaperRecolor.apply) : image
+        guard let recolor else { return image }
+        return image.flatMap(recolor.apply)
     }
 
     nonisolated private static func renderPlain(_ request: RenderRequest, source: PDFSource) -> CGImage? {
