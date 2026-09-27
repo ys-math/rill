@@ -239,7 +239,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate {
 
     private func applyPlaceholderBackground() {
         guard documentController == nil else { return }
-        placeholderBackdrop.apply(ConfigStore.shared.config.background, window: window)
+        placeholderBackdrop.apply(ConfigStore.shared.config, window: window)
     }
 
     // Nothing in the document view takes focus, so keys travel up the responder chain

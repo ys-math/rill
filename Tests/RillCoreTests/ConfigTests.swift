@@ -31,6 +31,8 @@ struct ConfigTests {
         dark_ink = "#EBDBB2"
         background = "glass"
         overlays = "glass"
+        glass_style = "clear"
+        glass_tint = "#00000040"
         [keys]
         "<C-f>" = "screen_down"
         "J" = "nop"
@@ -54,6 +56,8 @@ struct ConfigTests {
         #expect(config.darkInk == RGBColor(red: 0xeb / 255.0, green: 0xdb / 255.0, blue: 0xb2 / 255.0))
         #expect(config.background == .glass)
         #expect(config.overlays == .glass)
+        #expect(config.glassStyle == .clear)
+        #expect(config.glassTint == RGBColor(red: 0, green: 0, blue: 0, alpha: 0x40 / 255.0))
         #expect(config.keymap["<C-f>"] == .screenDown)
         #expect(config.keymap["J"] == nil)
         #expect(config.keymap["<S-Down>"] == .pageNext)
@@ -70,6 +74,8 @@ struct ConfigTests {
         colour = "red"
         background = "frosted"
         overlays = 1
+        glass_style = "frosted"
+        glass_tint = "#0000"
         rounded_corners = "round"
         scroll_step = 2
         zoom_step = 1
@@ -92,6 +98,8 @@ struct ConfigTests {
             #"[view] dark_mode: expected "system", "on" or "off""#,
             ##"[view] dark_paper: expected a colour like "#1d2021""##,
             #"[view] default_zoom: expected "fit-width", "fit-page" or a number"#,
+            #"[view] glass_style: expected "regular" or "clear""#,
+            ##"[view] glass_tint: expected a colour like "#1d2021" or "#1d202180""##,
             #"[view] overlays: expected "blur" or "glass""#,
             #"[view] page_gap: expected a number from 0 to 100"#,
             "[view] rounded_corners: expected true, false or a number from 0 to 100",
@@ -116,6 +124,10 @@ struct ConfigTests {
     @Test func hexColoursAreStrict() {
         for bad in ["242424", "#24242", "#2424244", "#gggggg", "#+24242", "black"] { #expect(RGBColor(hex: bad) == nil) }
         #expect(RGBColor(hex: "#ffffff") == RGBColor(red: 1, green: 1, blue: 1))
+        #expect(RGBColor(hex: "#ffffff80") == nil)
+        for bad in ["#fff", "#ffffff8", "#ffffffgg", "#ffffff+8"] { #expect(RGBColor(hexWithAlpha: bad) == nil) }
+        #expect(RGBColor(hexWithAlpha: "#ffffff") == RGBColor(red: 1, green: 1, blue: 1))
+        #expect(RGBColor(hexWithAlpha: "#ff000080") == RGBColor(red: 1, green: 0, blue: 0, alpha: 0x80 / 255.0))
     }
 
     @Test func malformedTOMLThrows() {

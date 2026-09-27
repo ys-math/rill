@@ -11,8 +11,9 @@ final class Backdrop: NSView {
 
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
-    /// Switches to `background`, making `window` see-through (or opaque again) to match.
-    func apply(_ background: Config.Background, scrollView: NSScrollView? = nil, window: NSWindow?) {
+    /// Switches to the config's background, making `window` see-through (or opaque again) to match.
+    func apply(_ config: Config, scrollView: NSScrollView? = nil, window: NSWindow?) {
+        let background = config.background
         if background != self.background || (material == nil && background != .solid) {
             self.background = background
             material?.removeFromSuperview()
@@ -21,6 +22,12 @@ final class Backdrop: NSView {
                 material.frame = bounds
                 material.autoresizingMask = [.width, .height]
                 addSubview(material)
+            }
+        }
+        if let glass = material as? NSGlassEffectView {
+            glass.style = config.glassStyle == .clear ? .clear : .regular
+            glass.tintColor = config.glassTint.map {
+                NSColor(srgbRed: $0.red, green: $0.green, blue: $0.blue, alpha: $0.alpha)
             }
         }
         scrollView?.drawsBackground = background == .solid

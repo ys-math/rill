@@ -184,6 +184,8 @@ zoom_step = 1.25             # +/-: zoom multiplier (1.01–4)
 dark_paper = "#242424"       # page colour in dark mode ("#rrggbb")
 dark_ink = "#dbdbdb"         # text colour in dark mode ("#rrggbb")
 background = "solid"         # "blur" (the desktop, blurred) | "glass" (Liquid Glass): around the pages
+glass_style = "regular"      # "clear": a more see-through glass background
+glass_tint = "#00000026"     # tint the glass background toward a colour ("#rrggbb" or "#rrggbbaa"); unset by default
 overlays = "blur"            # "glass": Liquid Glass for the search bar, status, toasts, picker, cheatsheet
 
 [synctex]
