@@ -4,7 +4,7 @@ APPS_DIR   ?= /Applications
 BIN_DIR    ?= $(HOME)/.local/bin
 LSREGISTER := /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
 
-.PHONY: all build test app install uninstall run clean
+.PHONY: all build test icon app install uninstall run clean
 
 all: app
 
@@ -14,6 +14,11 @@ build:
 test:
 	swift test
 
+# Redraw Resources/Rill.icns from scripts/make-icon.swift. The icns is checked in, so a
+# normal build doesn't need this.
+icon:
+	swift scripts/make-icon.swift Resources/Rill.icns
+
 # Assemble Rill.app from the SwiftPM products. The CLI ships inside the bundle so the
 # installed symlink always matches the installed app.
 app: build
@@ -21,6 +26,7 @@ app: build
 	rm -rf $(APP)
 	mkdir -p $(APP)/Contents/MacOS $(APP)/Contents/Resources
 	cp Resources/Info.plist $(APP)/Contents/Info.plist
+	cp Resources/Rill.icns $(APP)/Contents/Resources/
 	cp $(BIN)/RillApp $(BIN)/rill $(APP)/Contents/MacOS/
 	codesign --force --sign - $(APP)
 
