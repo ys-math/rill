@@ -23,6 +23,15 @@ struct LinkTarget: Sendable {
     var destination: Destination
 }
 
+/// A bookmark from the PDF's outline, for `t`.
+struct OutlineEntry: Sendable {
+    var title: String
+    var depth: Int
+    var page: Int
+    /// Display coordinates within `page`, when the bookmark names a spot.
+    var point: CGPoint?
+}
+
 /// Text, lines and links of one PDF version, read with PDFKit off the main thread.
 /// Built from the same bytes as the `PDFSource` on screen, so results always match what's shown.
 actor PDFTextIndex {
@@ -102,6 +111,32 @@ actor PDFTextIndex {
             }
         }
         return result
+    }
+
+    // MARK: - Outline
+
+    /// The document's bookmarks in reading order, flattened with their nesting depth.
+    func outline() -> [OutlineEntry] {
+        guard let root = document.outlineRoot else { return [] }
+        var entries: [OutlineEntry] = []
+        func visit(_ node: PDFOutline, depth: Int) {
+            for i in 0..<node.numberOfChildren {
+                guard let child = node.child(at: i) else { continue }
+                let title = (child.label ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                let target = child.destination ?? (child.action as? PDFActionGoTo)?.destination
+                if !title.isEmpty, let target, let page = target.page {
+                    let index = document.index(for: page)
+                    let raw = target.point
+                    let unspecified = CGFloat(kPDFDestinationUnspecifiedValue)
+                    let point = raw.y == unspecified ? nil
+                        : geometry(of: index, page).displayPoint(CGPoint(x: raw.x == unspecified ? 0 : raw.x, y: raw.y))
+                    entries.append(OutlineEntry(title: title, depth: depth, page: index, point: point))
+                }
+                visit(child, depth: depth + 1)
+            }
+        }
+        visit(root, depth: 0)
+        return entries
     }
 
     // MARK: - Private

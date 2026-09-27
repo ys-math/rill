@@ -40,6 +40,8 @@ public enum Action: String, CaseIterable, Sendable {
     case toggleStatus = "toggle_status"
     case showCheatsheet = "show_cheatsheet"
     case closeDocument = "close_document"
+    case openFile = "open_file"
+    case showOutline = "show_outline"
 
     /// Actions followed by one more key that names their target, like `m` + `a`.
     public var takesArgument: Bool {
@@ -69,7 +71,7 @@ extension Action {
         switch self {
         case .scrollDown, .scrollUp, .scrollLeft, .scrollRight, .halfPageDown, .halfPageUp, .screenDown, .screenUp:
             .scroll
-        case .pageNext, .pagePrev, .firstPage, .goToPage, .jumpBack, .jumpForward, .setMark, .goToMark:
+        case .pageNext, .pagePrev, .firstPage, .goToPage, .jumpBack, .jumpForward, .setMark, .goToMark, .showOutline:
             .jump
         case .zoomIn, .zoomOut, .zoomReset, .fitWidth, .fitPage, .toggleDarkMode, .toggleStatus:
             .zoom
@@ -77,7 +79,7 @@ extension Action {
             .search
         case .hintFollowLink, .hintInverseSearch, .hintYankLine:
             .hints
-        case .reload, .toggleFrameHUD, .showCheatsheet, .closeDocument:
+        case .reload, .toggleFrameHUD, .showCheatsheet, .closeDocument, .openFile:
             .other
         }
     }
@@ -120,6 +122,8 @@ extension Action {
         case .toggleStatus: "pin page / zoom status"
         case .showCheatsheet: "this cheatsheet"
         case .closeDocument: "close document"
+        case .openFile: "open a file"
+        case .showOutline: "go to a section (outline)"
         }
     }
 }
@@ -145,6 +149,7 @@ public enum KeyMap {
         "/": .searchForward, "?": .searchBackward, "n": .searchNext, "N": .searchPrevious,
         "f": .hintFollowLink, "F": .hintInverseSearch, "yf": .hintYankLine,
         "i": .toggleDarkMode, "g.": .toggleStatus, "g?": .showCheatsheet, "q": .closeDocument,
+        "o": .openFile, "t": .showOutline,
     ]
 
     /// A binding as it reads on a Mac keyboard: "<C-d>" → "⌃d", "<S-Space>" → "⇧Space", "<Down>" → "↓".

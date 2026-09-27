@@ -3,9 +3,9 @@
 A keyboard-driven, native macOS PDF viewer for writing LaTeX in Neovim: Skim's native feel with a
 sioyek-style keyboard model. See [SPEC.md](SPEC.md) for the full v1 plan.
 
-**Status:** in progress. Rendering, smooth motion, auto-reload, SyncTeX with Neovim, search,
-hints, marks, the jump list, dark mode and the config file work. The file and outline pickers
-are next.
+**Status:** the v1 feature set is in: rendering, smooth motion, auto-reload, SyncTeX with
+Neovim, search, hints, marks, the jump list, dark mode, the config file, and the file and outline
+pickers.
 
 ## Install
 
@@ -54,6 +54,9 @@ Compile with SyncTeX enabled (vimtex's latexmk defaults already pass `-synctex=1
 | `⌃o` / `⌃i` | Jump back / forward |
 | `m{a-z}` / `'{a-z}` | Set / go to a mark (saved per document) |
 | `''` | Back to where the last jump started |
+| `o` / `⌘O` | Open a PDF: recent files, then PDFs under `[picker] roots` |
+| `⌘⇧O` | Open with the standard macOS panel |
+| `t` | Go to a section (the PDF's outline) |
 | `i` | Dark mode on / off |
 | `g.` | Keep the page / zoom status visible |
 | `g?` | Cheatsheet of every binding (including your remaps) |
@@ -82,7 +85,7 @@ activate_on_inverse = "com.mitchellh.ghostty"   # app to bring forward afterward
 activate_on_forward = false                     # bring rill forward on forward search
 
 [picker]
-roots = ["~/github", "~/Papers"]   # folders the file picker searches (coming soon)
+roots = ["~/github", "~/Papers"]   # folders the file picker searches (with Spotlight)
 
 [keys]
 # key sequence = action name, as listed by g? ("nop" removes a default binding)
@@ -99,7 +102,11 @@ Key notation follows Vim: `<C-d>` (control), `<M-x>` (option), `<S-Space>` (shif
 `fit_width`, `fit_page`, `jump_back`, `jump_forward`, `set_mark`, `goto_mark`, `search_forward`,
 `search_backward`, `search_next`, `search_previous`, `clear_highlights`, `hint_follow_link`,
 `hint_inverse_search`, `hint_yank_line`, `toggle_dark_mode`, `toggle_status`, `show_cheatsheet`,
-`close_document`, `reload`, `toggle_frame_hud`.
+`close_document`, `open_file`, `show_outline`, `reload`, `toggle_frame_hud`.
+
+In the pickers, type to filter (fuzzy, smart-case), `↑`/`↓` or `⌃p`/`⌃n` to move, `Enter` to
+open, `Esc` to close. Launching rill from the Dock or Spotlight with nothing open shows the
+file picker.
 
 ## CLI
 

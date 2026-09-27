@@ -12,6 +12,13 @@ enum MainMenu {
         appMenu.addItem(withTitle: "Quit rill", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         main.addItem(submenu: appMenu, title: "rill")
 
+        let fileMenu = NSMenu(title: "File")
+        fileMenu.addItem(withTitle: "Open…", action: #selector(DocumentWindowController.openDocument(_:)), keyEquivalent: "o")
+        let panel = fileMenu.addItem(withTitle: "Open with Finder Panel…",
+                                     action: #selector(DocumentWindowController.openWithPanel(_:)), keyEquivalent: "o")
+        panel.keyEquivalentModifierMask = [.command, .shift]
+        main.addItem(submenu: fileMenu, title: "File")
+
         let windowMenu = NSMenu(title: "Window")
         windowMenu.addItem(withTitle: "Close", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
         windowMenu.addItem(withTitle: "Minimize", action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m")

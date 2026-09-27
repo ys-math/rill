@@ -12,6 +12,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.mainMenu = MainMenu.make()
         ConfigStore.shared.onProblem = { [weak self] message in self?.showProblem(message) }
         startServer()
+        // Launched by hand (Dock, Spotlight) with nothing to open: show the picker. Not when
+        // started in the background for a forward search, which must not take focus.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [self] in
+            if windows.isEmpty, NSApp.isActive { showPickerWindow() }
+        }
+    }
+
+    /// An empty window with the file picker up.
+    private func showPickerWindow() {
+        let controller = windows.first(where: { $0.url == nil }) ?? {
+            let empty = DocumentWindowController(url: nil, store: store)
+            show(empty)
+            return empty
+        }()
+        controller.showWindow(nil)
+        controller.showFilePicker()
+    }
+
+    /// ⌘O / ⌘⇧O with no window to handle them.
+    @objc func openDocument(_ sender: Any?) {
+        showPickerWindow()
+    }
+
+    @objc func openWithPanel(_ sender: Any?) {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.pdf]
+        panel.allowsMultipleSelection = true
+        guard panel.runModal() == .OK else { return }
+        for url in panel.urls { window(for: url, activate: true) }
     }
 
     /// Config problems go to the frontmost document; with none open, to the next one that opens.
@@ -32,7 +61,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Dock icon clicked with nothing open.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
-        if !hasVisibleWindows, windows.isEmpty { show(DocumentWindowController(url: nil, store: store)) }
+        if !hasVisibleWindows { showPickerWindow() }
         return true
     }
 
@@ -62,6 +91,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             controller = DocumentWindowController(url: url, store: store)
             windows.append(controller)
             controller.onClose = { [weak self, weak controller] in self?.windows.removeAll { $0 === controller } }
+            controller.onOpen = { [weak self] in self?.window(for: $0, activate: true) }
             isNew = true
         }
         if activate {
@@ -77,6 +107,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func show(_ controller: DocumentWindowController) {
         windows.append(controller)
         controller.onClose = { [weak self, weak controller] in self?.windows.removeAll { $0 === controller } }
+        controller.onOpen = { [weak self] in self?.window(for: $0, activate: true) }
         controller.showWindow(nil)
     }
 
