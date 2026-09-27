@@ -12,9 +12,9 @@ struct SpreadLayoutTests {
     @Test func pairsSitSideBySide() {
         let l = layout(5, .pairs)
         #expect(l.rows == [0...1, 2...3, 4...4])
-        #expect(l.size == CGSize(width: 20 + 600 + 10 + 600 + 20, height: 20 + 3 * 800 + 2 * 10 + 20))
+        #expect(l.size == CGSize(width: 20 + 600 + 600 + 20, height: 20 + 3 * 800 + 2 * 10 + 20))
         #expect(l.pageFrames[0] == CGRect(x: 20, y: 20, width: 600, height: 800))
-        #expect(l.pageFrames[1] == CGRect(x: 630, y: 20, width: 600, height: 800))
+        #expect(l.pageFrames[1] == CGRect(x: 620, y: 20, width: 600, height: 800))
         #expect(l.pageFrames[2].minY == 830)
         // A last odd page stays on the left.
         #expect(l.pageFrames[4].minX == 20)
@@ -23,10 +23,19 @@ struct SpreadLayoutTests {
     @Test func bookPutsTheFirstPageOnTheRight() {
         let l = layout(4, .book)
         #expect(l.rows == [0...0, 1...2, 3...3])
-        #expect(l.pageFrames[0].minX == 630)
+        #expect(l.pageFrames[0].minX == 620)
         #expect(l.pageFrames[1].minX == 20)
-        #expect(l.pageFrames[2].minX == 630)
+        #expect(l.pageFrames[2].minX == 620)
         #expect(l.pageFrames[3].minX == 20)
+    }
+
+    @Test func facingPagesShareASpineEdge() {
+        let l = layout(4, .book)
+        #expect(l.spineEdge(ofPage: 0) == nil) // alone on its row
+        #expect(l.spineEdge(ofPage: 1) == .maxXEdge)
+        #expect(l.spineEdge(ofPage: 2) == .minXEdge)
+        #expect(l.spineEdge(ofPage: 3) == nil)
+        #expect(layout(2, .off).spineEdge(ofPage: 0) == nil)
     }
 
     @Test func findsRowsAndPages() {
@@ -37,15 +46,16 @@ struct SpreadLayoutTests {
         #expect(l.rowIndex(ofPage: 4) == 2)
         #expect(l.pageIndex(atY: 900) == 2)
         #expect(l.pageIndex(at: CGPoint(x: 700, y: 900)) == 3)
-        #expect(l.pageIndex(at: CGPoint(x: 625, y: 900)) == 2) // in the gutter: the nearer page
+        #expect(l.pageIndex(at: CGPoint(x: 615, y: 900)) == 2)
+        #expect(l.pageIndex(at: CGPoint(x: 1300, y: 900)) == 3) // in the margin: the nearer page
         #expect(l.pages(inYRange: 500, 900) == 0...3)
         #expect(l.topOffset(ofPage: 3) == 825)
     }
 
     @Test func fitsTheWholeSpread() {
         let l = layout(2, .pairs)
-        #expect(l.fitWidthMagnification(viewportWidth: 1210 + 32, inset: 16) == 1)
-        #expect(l.fitPageMagnification(page: 1, viewport: CGSize(width: 1242, height: 5000), inset: 16) == 1)
+        #expect(l.fitWidthMagnification(viewportWidth: 1200 + 32, inset: 16) == 1)
+        #expect(l.fitPageMagnification(page: 1, viewport: CGSize(width: 1232, height: 5000), inset: 16) == 1)
     }
 
     @Test func positionsUseTheRowsFirstPage() {
@@ -66,10 +76,10 @@ struct SpreadLayoutTests {
         #expect(l.pagePoint(CGPoint(x: 20, y: 20), onPage: 0) == CGPoint(x: 100, y: 50))
     }
 
-    @Test func spreadMeetsAtTheSpineWithDifferentWidths() {
+    @Test func facingPagesTouchAtTheSpineWithDifferentWidths() {
         let l = layout(2, .pairs, trims: [CGRect(x: 0, y: 0, width: 500, height: 800), CGRect(x: 0, y: 0, width: 300, height: 800)])
-        #expect(l.pageFrames[0].maxX + 10 == l.pageFrames[1].minX)
-        #expect(l.size.width == 850) // 20 + 500 + 10 + 300 + 20
+        #expect(l.pageFrames[0].maxX == l.pageFrames[1].minX)
+        #expect(l.size.width == 840) // 20 + 500 + 300 + 20
     }
 }
 

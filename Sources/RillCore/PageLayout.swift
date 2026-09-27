@@ -2,7 +2,7 @@ import CoreGraphics
 
 /// Continuous vertical layout of pages in document points (unmagnified), top-down (flipped).
 ///
-/// Pages sit in rows: one page per row, or two side by side in a spread. Each page may show
+/// Pages sit in rows: one page per row, or two facing pages side by side in a spread. Each page may show
 /// only part of itself (its trim, after auto-trimming the margins); `pageFrames` are the
 /// visible cards, and `origin(ofPage:)` is where the page's own (0, 0) lands, so page display
 /// coordinates convert with `origin`, not with the frame.
@@ -64,17 +64,17 @@ public struct PageLayout: Equatable, Sendable {
                 y += trim.height + gap
             }
         } else {
-            // Left pages hang from the spine's left edge and right pages from its right, so
-            // facing pages meet in the middle whatever their widths.
+            // Left pages end at the spine and right pages start there, so facing pages touch
+            // like an open book whatever their widths.
             let leftWidth = trims.indices.filter { isLeft[$0] }.map { trims[$0].width }.max() ?? 0
             let rightWidth = trims.indices.filter { !isLeft[$0] }.map { trims[$0].width }.max() ?? 0
-            width = margin + leftWidth + gap + rightWidth + margin
-            let spine = (margin + leftWidth + gap / 2).rounded()
+            width = margin + leftWidth + rightWidth + margin
+            let spine = (margin + leftWidth).rounded()
             for row in rows {
                 var rowFrame = CGRect.null
                 for i in row {
                     let trim = trims[i]
-                    let x = isLeft[i] ? spine - gap / 2 - trim.width : spine + gap / 2
+                    let x = isLeft[i] ? spine - trim.width : spine
                     frames[i] = CGRect(x: x, y: y, width: trim.width, height: trim.height)
                     rowFrame = rowFrame.union(frames[i])
                 }
@@ -94,6 +94,13 @@ public struct PageLayout: Equatable, Sendable {
 
     public var pageCount: Int { pageFrames.count }
     public var rowCount: Int { rows.count }
+
+    /// The edge where page `index` meets its facing page in a spread, or nil when it has none.
+    public func spineEdge(ofPage index: Int) -> CGRectEdge? {
+        let row = rows[rowIndex(ofPage: index)]
+        guard row.count == 2 else { return nil }
+        return index == row.lowerBound ? .maxXEdge : .minXEdge
+    }
 
     /// Where page `index`'s display coordinates put their origin, in document points.
     public func origin(ofPage index: Int) -> CGPoint {
