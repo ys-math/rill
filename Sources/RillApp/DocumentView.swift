@@ -51,7 +51,10 @@ final class DocumentView: NSView {
     var pageCornerRadius: CGFloat = 0 {
         didSet {
             guard pageCornerRadius != oldValue else { return }
-            for page in pages { page.setCornerRadius(pageCornerRadius) }
+            // Facing pages keep square corners where they meet, so the spread reads as one sheet.
+            for (index, page) in pages.enumerated() {
+                page.setCornerRadius(pageCornerRadius, square: layout.spineEdge(ofPage: index))
+            }
         }
     }
 
@@ -394,10 +397,35 @@ private final class PageLayer: CALayer {
         overlays[key] = layer
     }
 
-    func setCornerRadius(_ radius: CGFloat) {
+    /// Rounds the card's corners, except the two on the `square` edge.
+    func setCornerRadius(_ radius: CGFloat, square: CGRectEdge? = nil) {
+        let corners: CACornerMask = switch square {
+        case .minXEdge: [.layerMaxXMinYCorner, .layerMaxXMaxYCorner]
+        case .maxXEdge: [.layerMinXMinYCorner, .layerMinXMaxYCorner]
+        default: [.layerMinXMinYCorner, .layerMaxXMinYCorner, .layerMinXMaxYCorner, .layerMaxXMaxYCorner]
+        }
         cornerRadius = radius
+        maskedCorners = corners
         content.cornerRadius = radius
-        shadowPath = CGPath(roundedRect: bounds, cornerWidth: radius, cornerHeight: radius, transform: nil)
+        content.maskedCorners = corners
+        shadowPath = Self.path(bounds, radius: radius, corners: corners)
+    }
+
+    private static func path(_ rect: CGRect, radius: CGFloat, corners: CACornerMask) -> CGPath {
+        let r = min(radius, rect.width / 2, rect.height / 2)
+        func arc(_ corner: CACornerMask) -> CGFloat { corners.contains(corner) ? r : 0 }
+        let path = CGMutablePath()
+        path.move(to: CGPoint(x: rect.minX + arc(.layerMinXMinYCorner), y: rect.minY))
+        path.addArc(tangent1End: CGPoint(x: rect.maxX, y: rect.minY), tangent2End: CGPoint(x: rect.maxX, y: rect.maxY),
+                    radius: arc(.layerMaxXMinYCorner))
+        path.addArc(tangent1End: CGPoint(x: rect.maxX, y: rect.maxY), tangent2End: CGPoint(x: rect.minX, y: rect.maxY),
+                    radius: arc(.layerMaxXMaxYCorner))
+        path.addArc(tangent1End: CGPoint(x: rect.minX, y: rect.maxY), tangent2End: CGPoint(x: rect.minX, y: rect.minY),
+                    radius: arc(.layerMinXMaxYCorner))
+        path.addArc(tangent1End: CGPoint(x: rect.minX, y: rect.minY), tangent2End: CGPoint(x: rect.maxX, y: rect.minY),
+                    radius: arc(.layerMinXMinYCorner))
+        path.closeSubpath()
+        return path
     }
 
     func setThumbnail(_ image: CGImage) {
