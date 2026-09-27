@@ -22,7 +22,7 @@ final class DocumentViewController: NSViewController {
     private var didInitialLayout = false
     private let initialState: DocumentState?
     /// A new version rendering offscreen, waiting to be swapped in.
-    private var pendingReload: (view: DocumentView, timeout: Task<Void, Never>)?
+    private var pendingReload: (view: DocumentView, timeout: Task<Void, Never>, markChanges: Bool)?
 
     /// `r` was pressed.
     var onReloadRequested: (() -> Void)?
@@ -31,6 +31,9 @@ final class DocumentViewController: NSViewController {
     /// `⌃^` was pressed.
     var onAlternateRequested: (() -> Void)?
     private let outlinePicker = PickerView()
+    private let linkPreview = LinkPreview()
+    private let visual = VisualController()
+    private var hoverTask: Task<Void, Never>?
     private var outline: [OutlineEntry] = []
 
     private let syncIndex: SyncIndex
@@ -101,10 +104,13 @@ final class DocumentViewController: NSViewController {
         search.host = self
         hints.host = self
         hints.onActiveChange = { [weak self] active in self?.pill.mode = active ? "HINT" : nil }
+        visual.host = self
+        visual.onModeChange = { [weak self] mode in self?.pill.mode = mode }
 
         scrollView.onUserScroll = { [weak self] in
             self?.motion.stop()
             self?.hints.cancel()
+            if self?.linkPreview.isShowing == true { self?.linkPreview.hide() }
             self?.zoomMode = .custom
         }
         motion.onFrame = { [weak self] settled in self?.refresh(settled: settled) }
@@ -240,6 +246,93 @@ final class DocumentViewController: NSViewController {
 
     private func wireDocumentView() {
         documentView.onCommandClick = { [weak self] in self?.inverseSearch(at: $0) }
+        documentView.onClick = { [weak self] in self?.click(at: $0) }
+        documentView.onHover = { [weak self] in self?.hover(at: $0) }
+    }
+
+    // MARK: - Links: click, hover, preview
+
+    /// The link under a document point, if any.
+    private func link(at point: CGPoint) async -> LinkTarget? {
+        let page = layout.pageIndex(atY: point.y)
+        let frame = layout.pageFrames[page]
+        guard frame.contains(point), let index = textIndex() else { return nil }
+        let local = CGPoint(x: point.x - frame.minX, y: point.y - frame.minY)
+        return await index.links(onPage: page).first { $0.rect.insetBy(dx: -2, dy: -2).contains(local) }
+    }
+
+    private func click(at point: CGPoint) {
+        Task { [weak self] in
+            guard let self, let link = await self.link(at: point) else { return }
+            self.follow(link)
+        }
+    }
+
+    /// Resting the pointer on a link shows its preview; moving off hides it.
+    private func hover(at point: CGPoint?) {
+        hoverTask?.cancel()
+        guard let point else {
+            if linkPreview.fromHover { linkPreview.hide() }
+            return
+        }
+        hoverTask = Task { [weak self] in
+            guard let self else { return }
+            let link = await self.link(at: point)
+            if self.linkPreview.fromHover, self.linkPreview.target?.rect != link?.rect { self.linkPreview.hide() }
+            guard let link, !(self.linkPreview.isShowing && self.linkPreview.target?.rect == link.rect) else { return }
+            try? await Task.sleep(for: .milliseconds(350))
+            guard !Task.isCancelled else { return }
+            self.showPreview(link, fromHover: true)
+        }
+    }
+
+    private func follow(_ link: LinkTarget) {
+        switch link.destination {
+        case .url(let url):
+            NSWorkspace.shared.open(url)
+        case .page(let index, let point):
+            guard index < layout.pageCount else { return NSSound.beep() }
+            jumps.record(currentPosition())
+            pill.flash()
+            if let point {
+                // A little context above the destination (usually a heading or equation).
+                documentView.ensureThumbnails(index...index + 1)
+                goY(layout.pageFrames[index].minY + point.y - motion.viewport.height * 0.05)
+            } else {
+                jump(toPage: index)
+            }
+        }
+    }
+
+    /// A card next to the link showing where it goes: a crop of the target page, sharp at the
+    /// current zoom, or a web link's address.
+    private func showPreview(_ link: LinkTarget, fromHover: Bool) {
+        let frame = layout.pageFrames[link.page]
+        let anchor = view.convert(link.rect.offsetBy(dx: frame.minX, dy: frame.minY), from: documentView)
+        linkPreview.target = link
+        linkPreview.fromHover = fromHover
+        switch link.destination {
+        case .url(let url):
+            linkPreview.show(image: nil, size: CGSize(width: 520, height: 34), text: url.absoluteString, near: anchor, in: view)
+        case .page(let index, let point):
+            guard index < layout.pageCount else { return }
+            let pageSize = layout.pageFrames[index].size
+            let top = max((point?.y ?? 0) - 18, 0)
+            let region = CGRect(x: 0, y: top, width: pageSize.width, height: min(230, pageSize.height - top))
+            let magnification = scrollView.magnification
+            let scale = min(magnification * backingScale, 4)
+            let source = source, dark = documentView.dark
+            Task { [weak self] in
+                let image = await Task.detached(priority: .userInitiated) { () -> UncheckedImageBox? in
+                    let pixels = CGRect(x: region.minX * scale, y: region.minY * scale, width: region.width * scale, height: region.height * scale)
+                    guard let plain = source.render(page: index, pixelRect: pixels, scale: scale) else { return nil }
+                    return UncheckedImageBox(dark ? PaperRecolor.apply(plain) ?? plain : plain)
+                }.value
+                guard let self, self.linkPreview.target?.rect == link.rect, let image else { return }
+                self.linkPreview.show(image: image.image, size: CGSize(width: region.width * magnification, height: region.height * magnification),
+                                      text: nil, near: anchor, in: self.view)
+            }
+        }
     }
 
     // MARK: - State and reload
@@ -258,7 +351,8 @@ final class DocumentViewController: NSViewController {
     /// Shows a new version of the document at the same place. The new version renders
     /// offscreen first and is swapped in within a single frame once its visible tiles are
     /// ready (or after a short timeout, with thumbnails standing in).
-    func replace(with newSource: PDFSource, noticed: ContinuousClock.Instant = .now) {
+    /// `markChanges`: a recompile, so show what changed (not for re-renders like dark mode).
+    func replace(with newSource: PDFSource, noticed: ContinuousClock.Instant = .now, markChanges: Bool = false) {
         cancelPendingReload()
         let newLayout = PageLayout(pageSizes: newSource.pageSizes, gap: CGFloat(ConfigStore.shared.config.pageGap))
         let newView = DocumentView(source: newSource, layout: newLayout, dark: Self.wantsDark(override: darkOverride))
@@ -274,7 +368,7 @@ final class DocumentViewController: NSViewController {
                 self?.swapIn(newView, source: newSource, layout: newLayout, noticed: noticed)
             }
         }
-        pendingReload = (newView, timeout)
+        pendingReload = (newView, timeout, markChanges)
         newView.prepare(visible: visible, magnification: target.magnification, backingScale: backingScale) { [weak self] in
             self?.swapIn(newView, source: newSource, layout: newLayout, noticed: noticed)
         }
@@ -282,9 +376,13 @@ final class DocumentViewController: NSViewController {
 
     private func swapIn(_ newView: DocumentView, source newSource: PDFSource, layout newLayout: PageLayout,
                         noticed: ContinuousClock.Instant) {
-        guard pendingReload?.view === newView else { return }
-        pendingReload?.timeout.cancel()
+        guard let pending = pendingReload, pending.view === newView else { return }
+        pending.timeout.cancel()
         pendingReload = nil
+        // The outgoing version's text, to compare with the new one afterwards.
+        let outgoing = pending.markChanges && ConfigStore.shared.config.changeMarkers
+            ? (index: textIndexCache ?? PDFTextIndex(data: source.data), pages: layout.pages(inYRange: motion.origin.y, motion.origin.y + motion.viewport.height))
+            : nil
 
         // Measure again: the user may have scrolled while the new version rendered.
         let target = placement(of: currentState(), in: newLayout)
@@ -304,11 +402,57 @@ final class DocumentViewController: NSViewController {
         wireDocumentView()
         textIndexCache = nil
         hints.cancel()
+        visual.cancel()
+        if linkPreview.isShowing { linkPreview.hide() }
         search.documentChanged()
+        if let outgoing, let oldIndex = outgoing.index, let pages = outgoing.pages {
+            markChanges(from: oldIndex, around: pages, in: newView)
+        }
         applySinglePage()
         pill.flash()
         if let boxes = pendingReveal { reveal(boxes) }
         reloadLog.debug("swapped in \((ContinuousClock.now - noticed).formatted(.units(allowed: [.milliseconds])), privacy: .public) after the change")
+    }
+
+    /// Compares the text lines around the viewport before and after a recompile (matched by an
+    /// LCS, so text that only moved doesn't count) and marks new or edited lines in the margin.
+    private func markChanges(from oldIndex: PDFTextIndex, around pages: ClosedRange<Int>, in view: DocumentView) {
+        guard let newIndex = textIndex() else { return }
+        let pageCount = layout.pageCount
+        Task { [weak self] in
+            func lines(_ index: PDFTextIndex, _ count: Int) async -> [TextLine] {
+                let range = max(pages.lowerBound - 1, 0)...min(pages.upperBound + 1, count - 1)
+                guard !range.isEmpty else { return [] }
+                return await index.lines(in: Dictionary(uniqueKeysWithValues: range.map { ($0, CGRect.infinite) }))
+            }
+            // Page numbers move relative to the text whenever content crosses a page break;
+            // they aren't edits.
+            let isPageNumber: (TextLine) -> Bool = { $0.text.count <= 6 && $0.text.allSatisfy { $0.isNumber || "ivxlcIVXLC".contains($0) } }
+            let oldCount = await oldIndex.pageCount
+            let old = await lines(oldIndex, oldCount).filter { !isPageNumber($0) }
+            let new = await lines(newIndex, pageCount).filter { !isPageNumber($0) }
+            let key: (TextLine) -> String = { $0.text.split(whereSeparator: \.isWhitespace).joined(separator: " ") }
+            let changed = ChangeDetector.changedBands(old: old.map(key), new: new.map(key))
+
+            var bands: [Int: [ClosedRange<CGFloat>]] = [:]
+            for band in changed {
+                if band.isEmpty {
+                    // A deletion: a tick where the removed text used to be.
+                    guard let next = new.indices.contains(band.lowerBound) ? new[band.lowerBound] : new.last else { continue }
+                    let y = new.indices.contains(band.lowerBound) ? next.rect.minY - 2 : next.rect.maxY + 2
+                    bands[next.page, default: []].append(y...y)
+                    continue
+                }
+                // One bar per page the changed lines are on.
+                for (page, group) in Dictionary(grouping: new[band], by: \.page) {
+                    let top = group.map(\.rect.minY).min()!, bottom = group.map(\.rect.maxY).max()!
+                    bands[page, default: []].append(top...bottom)
+                }
+            }
+            reloadLog.debug("change markers: \(old.count) → \(new.count) lines, changed \(String(describing: changed), privacy: .public)")
+            guard let self, self.documentView === view, !bands.isEmpty else { return }
+            self.documentView.showChangeMarkers(bands)
+        }
     }
 
     private func cancelPendingReload() {
@@ -352,7 +496,13 @@ final class DocumentViewController: NSViewController {
             cheatsheet.hide()
             return true
         }
+        if linkPreview.isShowing {
+            let target = linkPreview.target
+            linkPreview.hide()
+            if token == "<CR>", let target { follow(target); return true }
+        }
         if hints.isActive { return hints.feed(token) }
+        if visual.isActive { return visual.feed(token) }
         // Auto-repeat of a held motion key is handled by continuous scrolling; others repeat normally.
         if event.isARepeat, continuousKey == event.keyCode { return true }
         let result = resolver.feed(token)
@@ -382,7 +532,7 @@ final class DocumentViewController: NSViewController {
     var debugStatus: String {
         let p = currentPosition()
         return "page=\(p.page + 1) offset=\(String(format: "%.3f", p.offset)) x=\(Int(motion.origin.x)) "
-            + "single=\(singlePage.map { "\($0 + 1)" } ?? "-") dark=\(documentView.dark) gap=\(Int(layout.gap)) pill=\(pill.debugText.isEmpty ? "-" : pill.debugText) "
+            + "markers=\(documentView.debugChangeMarkers) single=\(singlePage.map { "\($0 + 1)" } ?? "-") dark=\(documentView.dark) gap=\(Int(layout.gap)) pill=\(pill.debugText.isEmpty ? "-" : pill.debugText) "
             + "cheatsheet=\(cheatsheet.isShowing) toast=\(toast.debugMessage.isEmpty ? "-" : toast.debugMessage) hints=\(hints.debugCount) search=\(search.debugStatus) marks=\(marks.keys.sorted().joined()) jumps=\(jumps.count) "
             + "pasteboard=\(NSPasteboard.general.string(forType: .string)?.prefix(30) ?? "") "
             + "outline=\(outlinePicker.isShowing ? outlinePicker.debugSummary : "-")"
@@ -406,6 +556,14 @@ final class DocumentViewController: NSViewController {
         pill.pending = nil
         if cheatsheet.isShowing {
             cheatsheet.hide()
+            return
+        }
+        if linkPreview.isShowing {
+            linkPreview.hide()
+            return
+        }
+        if visual.isActive {
+            _ = visual.feed("<Esc>")
             return
         }
         if hints.isActive {
@@ -507,6 +665,9 @@ final class DocumentViewController: NSViewController {
         case .showOutline: showOutline()
         case .toggleSinglePage: toggleSinglePage()
         case .alternateFile: onAlternateRequested?()
+        case .hintPreviewLink: hints.begin(.previewLink)
+        case .visualMode: hints.begin(.visual(linewise: false))
+        case .visualLineMode: hints.begin(.visual(linewise: true))
         }
     }
 
@@ -745,28 +906,18 @@ extension DocumentViewController: SearchHost, HintHost {
     }
 
     func hintsUnavailable(_ kind: HintKind) {
-        toast.show(kind == .followLink ? "no links on screen" : "no text on screen")
+        toast.show(kind.targetsLinks ? "no links on screen" : "no text on screen")
     }
 
     func hintChosen(_ target: HintTarget, kind: HintKind) {
         let frame = layout.pageFrames[target.page]
         switch (kind, target) {
         case (.followLink, .link(let link)):
-            switch link.destination {
-            case .url(let url):
-                NSWorkspace.shared.open(url)
-            case .page(let index, let point):
-                guard index < layout.pageCount else { return NSSound.beep() }
-                jumps.record(currentPosition())
-                if let point {
-                    // A little context above the destination (usually a heading or equation).
-                    let top = layout.pageFrames[index].minY + point.y - motion.viewport.height * 0.05
-                    documentView.ensureThumbnails(index...index + 1)
-                    goY(top)
-                } else {
-                    jump(toPage: index)
-                }
-            }
+            follow(link)
+        case (.previewLink, .link(let link)):
+            showPreview(link, fromHover: false)
+        case (.visual(let linewise), .line(let line)):
+            visual.begin(at: TextPosition(page: line.page, index: line.range.location), linewise: linewise)
         case (.inverseSearch, .line(let line)):
             documentView.flash(line.rect.offsetBy(dx: frame.minX, dy: frame.minY))
             let syncIndex = syncIndex
@@ -784,4 +935,28 @@ extension DocumentViewController: SearchHost, HintHost {
             break
         }
     }
+}
+
+// MARK: - Visual mode
+
+extension DocumentViewController: VisualHost {
+    func showSelection(_ rects: [Int: [CGRect]], cursor: (page: Int, rect: CGRect)?) {
+        documentView.setSelection(rects, cursor: cursor)
+    }
+
+    func revealCursor(page: Int, rect: CGRect) {
+        guard page < layout.pageCount else { return }
+        reveal(rect, onPage: page, recordingJump: false)
+    }
+
+    func visualEnded(copied: String?) {
+        guard let copied else { return }
+        toast.show(copied.isEmpty ? "nothing copied" : "copied \(copied.count) characters")
+    }
+}
+
+/// CGImages are immutable; these carry them across a task hop.
+private struct UncheckedImageBox: @unchecked Sendable {
+    let image: CGImage
+    init(_ image: CGImage) { self.image = image }
 }

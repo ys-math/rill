@@ -21,6 +21,7 @@ struct ConfigTests {
         default_zoom = 1.5
         dark_mode = "on"
         page_gap = 12
+        change_markers = false
         [keys]
         "<C-f>" = "screen_down"
         "J" = "nop"
@@ -34,6 +35,7 @@ struct ConfigTests {
         #expect(config.defaultZoom == .magnification(1.5))
         #expect(config.darkMode == .on)
         #expect(config.pageGap == 12)
+        #expect(!config.changeMarkers)
         #expect(config.keymap["<C-f>"] == .screenDown)
         #expect(config.keymap["J"] == nil)
         #expect(config.keymap["<S-Down>"] == .pageNext)

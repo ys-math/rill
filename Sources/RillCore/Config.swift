@@ -15,6 +15,8 @@ public struct Config: Equatable, Sendable {
     public var defaultZoom = ZoomSetting.fitWidth
     public var darkMode = DarkMode.system
     public var pageGap: Double = 8
+    /// Mark what changed in the margin after a recompile.
+    public var changeMarkers = true
     /// The effective bindings: defaults with the `[keys]` table applied.
     public var keymap: [String: Action] = KeyMap.defaults
 
@@ -85,6 +87,9 @@ public struct Config: Equatable, Sendable {
                             warnings.append(#"[view] dark_mode: expected "system", "on" or "off""#); continue
                         }
                         config.darkMode = mode
+                    case "change_markers":
+                        guard let b = value.bool else { warnWrongType(table, key, expected: "true or false", got: value); continue }
+                        config.changeMarkers = b
                     case "page_gap":
                         guard let gap = value.number, (0...100).contains(gap) else {
                             warnings.append("[view] page_gap: expected a number from 0 to 100"); continue

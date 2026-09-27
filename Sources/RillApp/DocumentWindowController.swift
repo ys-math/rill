@@ -70,7 +70,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate {
             window.setContentSize(NSSize(width: 900, height: 1100))
 
             let reloader = DocumentReloader(url: url, current: source)
-            reloader.onReload = { [weak controller] in controller?.replace(with: $0, noticed: $1) }
+            reloader.onReload = { [weak controller] in controller?.replace(with: $0, noticed: $1, markChanges: true) }
             controller.onReloadRequested = { [weak reloader] in reloader?.forceReload() }
             reloader.start()
             self.reloader = reloader
