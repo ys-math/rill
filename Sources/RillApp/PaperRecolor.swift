@@ -8,8 +8,8 @@ import RillCore
 /// and white.
 struct PaperRecolor: Equatable, Sendable {
     /// Paper and ink after recolouring (sRGB).
-    let paper: RGBColor
-    let ink: RGBColor
+    let paper: RillCore.RGBColor
+    let ink: RillCore.RGBColor
 
     var paperColor: CGColor { CGColor(srgbRed: paper.red, green: paper.green, blue: paper.blue, alpha: 1) }
 
