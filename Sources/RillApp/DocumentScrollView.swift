@@ -6,6 +6,8 @@ import AppKit
 final class DocumentScrollView: NSScrollView {
     /// The user took over with the trackpad or mouse; programmatic motion should stop.
     var onUserScroll: (() -> Void)?
+    /// Sees each scroll event first; returning true consumes it (single-page turns).
+    var interceptScroll: ((NSEvent) -> Bool)?
     /// True during a trackpad pinch. Tiles aren't re-rendered until it ends.
     private(set) var isLiveMagnifying = false
 
@@ -34,6 +36,7 @@ final class DocumentScrollView: NSScrollView {
 
     override func scrollWheel(with event: NSEvent) {
         onUserScroll?()
+        if interceptScroll?(event) == true { return }
         super.scrollWheel(with: event)
     }
 
