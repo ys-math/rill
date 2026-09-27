@@ -50,6 +50,8 @@ final class DocumentViewController: NSViewController {
     private var appearanceObservation: NSKeyValueObservation?
     /// Single-page mode (`s`): the first page of the one row shown. Nil when scrolling continuously.
     private var singlePage: Int?
+    /// Single-page mode: turns the page when the trackpad or wheel pushes on past its edge.
+    private var overscroll = Overscroll()
     /// `S` overrides the config's spread for this window.
     private var spreadOverride: PageLayout.Spread?
     /// `c` overrides the config's trim for this window.
@@ -129,6 +131,7 @@ final class DocumentViewController: NSViewController {
             if self?.linkPreview.isShowing == true { self?.linkPreview.hide() }
             self?.zoomMode = .custom
         }
+        scrollView.interceptScroll = { [weak self] event in self?.overscroll(event) ?? false }
         motion.onFrame = { [weak self] settled in self?.refresh(settled: settled) }
 
         let center = NotificationCenter.default
@@ -881,6 +884,33 @@ final class DocumentViewController: NSViewController {
     private func turnsPage(forward: Bool) -> Bool {
         guard singlePage != nil, let limit = motion.yLimit else { return false }
         return forward ? motion.origin.y >= limit.upperBound - 1 : motion.origin.y <= limit.lowerBound + 1
+    }
+
+    /// Trackpad or wheel scrolling on past the page's edge turns the page. Returns whether the
+    /// event was consumed.
+    private func overscroll(_ event: NSEvent) -> Bool {
+        guard singlePage != nil else { return false }
+        let phase: Overscroll.Phase
+        if !event.momentumPhase.isEmpty {
+            phase = .momentum
+        } else if event.phase.contains(.began) || event.phase.contains(.mayBegin) {
+            phase = .began
+        } else if event.phase.contains(.ended) || event.phase.contains(.cancelled) {
+            phase = .ended
+        } else if event.phase.isEmpty {
+            phase = .wheel
+        } else {
+            phase = .changed
+        }
+        // Positive scrollingDeltaY scrolls toward the top. A wheel reports lines, not points.
+        let delta = -event.scrollingDeltaY * (event.hasPreciseScrollingDeltas ? 1 : 20)
+        switch overscroll.feed(delta: delta, phase: phase, atStart: turnsPage(forward: false), atEnd: turnsPage(forward: true)) {
+        case .pass: return false
+        case .swallow: return true
+        case .turn(let direction):
+            turnPage(by: direction)
+            return true
+        }
     }
 
     private func turnPage(by delta: Int) {
