@@ -50,6 +50,10 @@ public enum Action: String, CaseIterable, Sendable {
     case visualMode = "visual_mode"
     /// `V`: the same, whole lines.
     case visualLineMode = "visual_line_mode"
+    /// `S`: one page per row → two (1–2, 3–4) → two, book style (1, 2–3, …).
+    case toggleSpread = "toggle_spread"
+    /// `c`: auto-trim the white margins.
+    case toggleTrim = "toggle_trim"
 
     /// Actions followed by one more key that names their target, like `m` + `a`.
     public var takesArgument: Bool {
@@ -81,7 +85,8 @@ extension Action {
             .scroll
         case .pageNext, .pagePrev, .firstPage, .goToPage, .jumpBack, .jumpForward, .setMark, .goToMark, .showOutline:
             .jump
-        case .zoomIn, .zoomOut, .zoomReset, .fitWidth, .fitPage, .toggleDarkMode, .toggleStatus, .toggleSinglePage:
+        case .zoomIn, .zoomOut, .zoomReset, .fitWidth, .fitPage, .toggleDarkMode, .toggleStatus, .toggleSinglePage,
+             .toggleSpread, .toggleTrim:
             .zoom
         case .searchForward, .searchBackward, .searchNext, .searchPrevious, .clearHighlights:
             .search
@@ -137,6 +142,8 @@ extension Action {
         case .hintPreviewLink: "preview a link's target"
         case .visualMode: "select text (from a line)"
         case .visualLineMode: "select whole lines"
+        case .toggleSpread: "two-page spread (pairs / book / off)"
+        case .toggleTrim: "trim white margins"
         }
     }
 }
@@ -162,7 +169,7 @@ public enum KeyMap {
         "/": .searchForward, "?": .searchBackward, "n": .searchNext, "N": .searchPrevious,
         "f": .hintFollowLink, "F": .hintInverseSearch, "yf": .hintYankLine,
         "i": .toggleDarkMode, "g.": .toggleStatus, "g?": .showCheatsheet, "q": .closeDocument,
-        "o": .openFile, "t": .showOutline, "s": .toggleSinglePage,
+        "o": .openFile, "t": .showOutline, "s": .toggleSinglePage, "S": .toggleSpread, "c": .toggleTrim,
         "<C-^>": .alternateFile, "<C-6>": .alternateFile,
         "p": .hintPreviewLink, "v": .visualMode, "V": .visualLineMode,
     ]

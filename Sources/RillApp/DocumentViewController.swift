@@ -47,8 +47,17 @@ final class DocumentViewController: NSViewController {
     /// `i` overrides the config's dark mode for this window.
     private var darkOverride: Bool?
     private var appearanceObservation: NSKeyValueObservation?
-    /// Single-page mode (`s`): the one page shown. Nil when scrolling continuously.
+    /// Single-page mode (`s`): the first page of the one row shown. Nil when scrolling continuously.
     private var singlePage: Int?
+    /// `S` overrides the config's spread for this window.
+    private var spreadOverride: PageLayout.Spread?
+    /// `c` overrides the config's trim for this window.
+    private var trimOverride: Bool?
+    /// The latest measured margins. Laid out on newer versions too until they're measured.
+    private var trimProfile: TrimProfile?
+    /// The version `trimProfile` was measured on.
+    private weak var trimMeasuredSource: PDFSource?
+    private var trimTask: Task<Void, Never>?
     private let hints = HintController()
     private var jumps = JumpList<PagePosition>(isSame: { a, b in a.page == b.page && abs(a.offset - b.offset) < 0.02 })
     private var marks: [String: PagePosition]
@@ -57,7 +66,8 @@ final class DocumentViewController: NSViewController {
 
     init(source: PDFSource, state: DocumentState?) {
         self.source = source
-        self.layout = PageLayout(pageSizes: source.pageSizes, gap: CGFloat(ConfigStore.shared.config.pageGap))
+        self.layout = PageLayout(pageSizes: source.pageSizes, spread: ConfigStore.shared.config.spread,
+                                 gap: CGFloat(ConfigStore.shared.config.pageGap))
         self.documentView = DocumentView(source: source, layout: layout, dark: Self.wantsDark(override: nil))
         self.initialState = state
         self.syncIndex = SyncIndex(pdfPath: source.url.path)
@@ -149,19 +159,47 @@ final class DocumentViewController: NSViewController {
     private func configDidChange() {
         let config = ConfigStore.shared.config
         resolver = KeyResolver(keymap: config.keymap)
-        if layout.gap != CGFloat(config.pageGap) || documentView.dark != Self.wantsDark(override: darkOverride) {
+        if layout != makeLayout(for: source) || documentView.dark != Self.wantsDark(override: darkOverride) {
             rebuild()
         }
+        measureTrimIfNeeded()
     }
 
     private func appearanceDidChange() {
         if documentView.dark != Self.wantsDark(override: darkOverride) { rebuild() }
     }
 
-    /// Re-renders the same version with current settings (dark mode, page gap), swapping it in
-    /// the same way a reload does.
+    /// Re-renders the same version with current settings (dark mode, page gap, spread, trim),
+    /// swapping it in the same way a reload does.
     private func rebuild() {
         replace(with: source)
+    }
+
+    private var spread: PageLayout.Spread { spreadOverride ?? ConfigStore.shared.config.spread }
+    private var trimEnabled: Bool { trimOverride ?? ConfigStore.shared.config.trim }
+
+    private func makeLayout(for source: PDFSource) -> PageLayout {
+        PageLayout(pageSizes: source.pageSizes, trims: trimEnabled ? trimProfile?.trims(for: source.pageSizes) : nil,
+                   spread: spread, gap: CGFloat(ConfigStore.shared.config.pageGap))
+    }
+
+    /// When trimming, measures the margins of the version on screen (once per version) in the
+    /// background, and lays it out again if they changed.
+    private func measureTrimIfNeeded() {
+        guard trimEnabled, trimMeasuredSource !== source else { return }
+        trimTask?.cancel()
+        let source = source
+        trimTask = Task { [weak self] in
+            let profile = await Task.detached(priority: .userInitiated) {
+                TrimProfile(contentBoxes: source.contentBoxes(), pageSizes: source.pageSizes)
+            }.value
+            guard let self, !Task.isCancelled, self.source === source else { return }
+            self.trimMeasuredSource = source
+            guard profile != self.trimProfile else { return }
+            self.trimProfile = profile
+            // A newer version is on its way in; it's measured once it's swapped in.
+            if self.trimEnabled, self.pendingReload == nil { self.rebuild() }
+        }
     }
 
     /// Config problems stay up longer than command feedback: they need reading.
@@ -183,6 +221,7 @@ final class DocumentViewController: NSViewController {
         refresh(settled: true)
         wireDocumentView()
         if let boxes = pendingReveal { reveal(boxes) }
+        measureTrimIfNeeded()
     }
 
     // MARK: - SyncTeX
@@ -209,33 +248,34 @@ final class DocumentViewController: NSViewController {
         let rect = boxes.map(\.rect).reduce(first.rect) { $0.union($1) }
         let scrolled = reveal(rect, onPage: first.page, recordingJump: true)
         syncLog.debug("reveal page \(first.page + 1) box \(String(describing: first.rect), privacy: .public) (\(boxes.count) boxes) scroll \(scrolled)")
-        documentView.flash(rect.offsetBy(dx: layout.pageFrames[first.page].minX, dy: layout.pageFrames[first.page].minY))
+        let origin = layout.origin(ofPage: first.page)
+        documentView.flash(rect.offsetBy(dx: origin.x, dy: origin.y))
     }
 
     /// Scrolls `rect` (display coordinates on `page`) into view unless it's already comfortably
     /// visible, putting it a third of the way down: context above, room below. Returns whether it scrolled.
     @discardableResult
     private func reveal(_ rect: CGRect, onPage page: Int, recordingJump: Bool) -> Bool {
-        let frame = layout.pageFrames[page]
-        let target = rect.offsetBy(dx: frame.minX, dy: frame.minY)
+        let origin = layout.origin(ofPage: page)
+        let target = rect.offsetBy(dx: origin.x, dy: origin.y)
         let visible = CGRect(origin: motion.origin, size: motion.viewport)
         let comfortable = visible.insetBy(dx: 0, dy: visible.height * 0.1)
         let inView = comfortable.contains(CGPoint(x: target.midX, y: target.minY))
             && comfortable.contains(CGPoint(x: target.midX, y: target.maxY))
         guard !inView else { return false }
         if recordingJump { jumps.record(currentPosition()) }
-        documentView.ensureThumbnails(page...page + 1)
+        ensureThumbnails(fromPage: page)
         goY(target.minY - visible.height / 3)
         return true
     }
 
     private func inverseSearch(at point: CGPoint) {
-        let index = layout.pageIndex(atY: point.y)
-        let frame = layout.pageFrames[index]
-        guard frame.contains(point) else { return }
+        let index = layout.pageIndex(at: point)
+        guard layout.pageFrames[index].contains(point) else { return }
+        let local = layout.pagePoint(point, onPage: index)
         let syncIndex = syncIndex
         Task {
-            guard let location = await syncIndex.location(page: index, x: point.x - frame.minX, y: point.y - frame.minY) else {
+            guard let location = await syncIndex.location(page: index, x: local.x, y: local.y) else {
                 syncLog.notice("inverse search: no source for page \(index + 1)")
                 NSSound.beep()
                 return
@@ -254,10 +294,9 @@ final class DocumentViewController: NSViewController {
 
     /// The link under a document point, if any.
     private func link(at point: CGPoint) async -> LinkTarget? {
-        let page = layout.pageIndex(atY: point.y)
-        let frame = layout.pageFrames[page]
-        guard frame.contains(point), let index = textIndex() else { return nil }
-        let local = CGPoint(x: point.x - frame.minX, y: point.y - frame.minY)
+        let page = layout.pageIndex(at: point)
+        guard layout.pageFrames[page].contains(point), let index = textIndex() else { return nil }
+        let local = layout.pagePoint(point, onPage: page)
         return await index.links(onPage: page).first { $0.rect.insetBy(dx: -2, dy: -2).contains(local) }
     }
 
@@ -296,8 +335,8 @@ final class DocumentViewController: NSViewController {
             pill.flash()
             if let point {
                 // A little context above the destination (usually a heading or equation).
-                documentView.ensureThumbnails(index...index + 1)
-                goY(layout.pageFrames[index].minY + point.y - motion.viewport.height * 0.05)
+                ensureThumbnails(fromPage: index)
+                goY(layout.origin(ofPage: index).y + point.y - motion.viewport.height * 0.05)
             } else {
                 jump(toPage: index)
             }
@@ -307,8 +346,8 @@ final class DocumentViewController: NSViewController {
     /// A card next to the link showing where it goes: a crop of the target page, sharp at the
     /// current zoom, or a web link's address.
     private func showPreview(_ link: LinkTarget, fromHover: Bool) {
-        let frame = layout.pageFrames[link.page]
-        let anchor = view.convert(link.rect.offsetBy(dx: frame.minX, dy: frame.minY), from: documentView)
+        let origin = layout.origin(ofPage: link.page)
+        let anchor = view.convert(link.rect.offsetBy(dx: origin.x, dy: origin.y), from: documentView)
         linkPreview.target = link
         linkPreview.fromHover = fromHover
         switch link.destination {
@@ -316,9 +355,10 @@ final class DocumentViewController: NSViewController {
             linkPreview.show(image: nil, size: CGSize(width: 520, height: 34), text: url.absoluteString, near: anchor, in: view)
         case .page(let index, let point):
             guard index < layout.pageCount else { return }
-            let pageSize = layout.pageFrames[index].size
-            let top = max((point?.y ?? 0) - 18, 0)
-            let region = CGRect(x: 0, y: top, width: pageSize.width, height: min(230, pageSize.height - top))
+            // The shown part of the page: trimmed like the page itself.
+            let trim = layout.trims[index]
+            let top = max((point?.y ?? 0) - 18, trim.minY)
+            let region = CGRect(x: trim.minX, y: top, width: trim.width, height: max(min(230, trim.maxY - top), 1))
             let magnification = scrollView.magnification
             let scale = min(magnification * backingScale, 4)
             let source = source, dark = documentView.dark
@@ -354,7 +394,7 @@ final class DocumentViewController: NSViewController {
     /// `markChanges`: a recompile, so show what changed (not for re-renders like dark mode).
     func replace(with newSource: PDFSource, noticed: ContinuousClock.Instant = .now, markChanges: Bool = false) {
         cancelPendingReload()
-        let newLayout = PageLayout(pageSizes: newSource.pageSizes, gap: CGFloat(ConfigStore.shared.config.pageGap))
+        let newLayout = makeLayout(for: newSource)
         let newView = DocumentView(source: newSource, layout: newLayout, dark: Self.wantsDark(override: darkOverride))
         let target = placement(of: currentState(), in: newLayout)
         let visible = CGRect(origin: target.origin,
@@ -411,6 +451,7 @@ final class DocumentViewController: NSViewController {
         applySinglePage()
         pill.flash()
         if let boxes = pendingReveal { reveal(boxes) }
+        measureTrimIfNeeded()
         reloadLog.debug("swapped in \((ContinuousClock.now - noticed).formatted(.units(allowed: [.milliseconds])), privacy: .public) after the change")
     }
 
@@ -613,12 +654,12 @@ final class DocumentViewController: NSViewController {
         case .halfPageUp: motion.scroll(by: -n * viewport.height / 2, axis: .vertical)
         case .screenDown: motion.scroll(by: n * viewport.height * 0.9, axis: .vertical)
         case .screenUp: motion.scroll(by: -n * viewport.height * 0.9, axis: .vertical)
-        case .pageNext: jump(toPage: pageAtTop() + Int(n))
+        case .pageNext: jump(toRow: rowAtTop() + Int(n))
         case .pagePrev:
-            // Like `[[`: first back to the top of the current page, then to earlier pages.
-            let current = pageAtTop()
-            let atTop = motion.origin.y <= layout.topOffset(ofPage: current) + 2
-            jump(toPage: current - (atTop ? Int(n) : Int(n) - 1))
+            // Like `[[`: first back to the top of the current page (or spread), then to earlier ones.
+            let current = rowAtTop()
+            let atTop = motion.origin.y <= layout.topOffset(ofRow: current) + 2
+            jump(toRow: current - (atTop ? Int(n) : Int(n) - 1))
         case .firstPage: jump(toPage: (count ?? 1) - 1, recordingJump: true)
         case .goToPage: jump(toPage: count.map { $0 - 1 } ?? layout.pageCount - 1, recordingJump: true)
         case .zoomIn: zoom(to: scrollView.magnification * pow(1.25, n))
@@ -668,6 +709,25 @@ final class DocumentViewController: NSViewController {
         case .hintPreviewLink: hints.begin(.previewLink)
         case .visualMode: hints.begin(.visual(linewise: false))
         case .visualLineMode: hints.begin(.visual(linewise: true))
+        case .toggleSpread:
+            let next: PageLayout.Spread = switch layout.spread {
+            case .off: .pairs
+            case .pairs: .book
+            case .book: .off
+            }
+            spreadOverride = next
+            rebuild()
+            let message = switch next {
+            case .off: "one page per row"
+            case .pairs: "two-page spread"
+            case .book: "two-page spread, book style"
+            }
+            toast.show(message)
+        case .toggleTrim:
+            trimOverride = !trimEnabled
+            if layout != makeLayout(for: source) { rebuild() }
+            measureTrimIfNeeded()
+            toast.show(trimEnabled ? "margins trimmed" : "whole pages")
         }
     }
 
@@ -676,18 +736,30 @@ final class DocumentViewController: NSViewController {
         (axis == .vertical ? motion.viewport.height : motion.viewport.width) / 10
     }
 
-    private func pageAtTop() -> Int {
-        // Bias slightly down so a page whose top is just above the viewport still counts.
-        layout.pageIndex(atY: motion.origin.y + layout.gap)
+    private func rowAtTop() -> Int {
+        // Single-page mode centres a short row, so the viewport's top can sit above it.
+        if let page = singlePage { return layout.rowIndex(ofPage: page) }
+        // Bias slightly down so a row whose top is just above the viewport still counts.
+        return layout.rowIndex(atY: motion.origin.y + layout.gap)
     }
 
     private func jump(toPage index: Int, recordingJump: Bool = false) {
         if recordingJump { jumps.record(currentPosition()) }
-        let page = min(max(index, 0), layout.pageCount - 1)
-        let y = layout.topOffset(ofPage: page)
-        let pagesInView = max(Int((motion.viewport.height / (layout.pageFrames[page].height + layout.gap)).rounded(.up)), 1)
-        documentView.ensureThumbnails(page...(page + pagesInView))
+        jump(toRow: layout.rowIndex(ofPage: index))
+    }
+
+    private func jump(toRow index: Int) {
+        let row = min(max(index, 0), layout.rowCount - 1)
+        let y = layout.topOffset(ofRow: row)
+        let rowsInView = max(Int((motion.viewport.height / (layout.rowFrames[row].height + layout.gap)).rounded(.up)), 1)
+        documentView.ensureThumbnails(layout.rows[row].lowerBound...layout.rows[min(row + rowsInView, layout.rowCount - 1)].upperBound)
         goY(y)
+    }
+
+    /// Thumbnails for the row page `index` is in and the row after it, so a jump there never lands on blank pages.
+    private func ensureThumbnails(fromPage index: Int) {
+        let row = layout.rowIndex(ofPage: index)
+        documentView.ensureThumbnails(layout.rows[row].lowerBound...layout.rows[min(row + 1, layout.rowCount - 1)].upperBound)
     }
 
     func currentPosition() -> PagePosition {
@@ -720,8 +792,8 @@ final class DocumentViewController: NSViewController {
         jumps.record(currentPosition())
         pill.flash()
         if let point = entry.point {
-            documentView.ensureThumbnails(entry.page...entry.page + 1)
-            goY(layout.pageFrames[entry.page].minY + point.y - motion.viewport.height * 0.05)
+            ensureThumbnails(fromPage: entry.page)
+            goY(layout.origin(ofPage: entry.page).y + point.y - motion.viewport.height * 0.05)
         } else {
             jump(toPage: entry.page)
         }
@@ -732,13 +804,13 @@ final class DocumentViewController: NSViewController {
     /// Every programmatic jump goes through here, so single-page mode can turn to the page
     /// the target is on first. `y` is the viewport's new top edge.
     private func goY(_ y: CGFloat) {
-        guard singlePage != nil else { return motion.jump(toY: y) }
-        // The page the viewer will be looking at: a third of the way down the viewport.
-        let page = layout.pageIndex(atY: y + motion.viewport.height / 3)
-        if page == singlePage {
+        guard let current = singlePage else { return motion.jump(toY: y) }
+        // The row the viewer will be looking at: a third of the way down the viewport.
+        let row = layout.rowIndex(atY: y + motion.viewport.height / 3)
+        if row == layout.rowIndex(ofPage: current) {
             motion.jump(toY: y)
         } else {
-            singlePage = page
+            singlePage = layout.rows[row].lowerBound
             applySinglePage()
             motion.cut(toY: y)
         }
@@ -757,21 +829,23 @@ final class DocumentViewController: NSViewController {
         }
     }
 
-    /// Restricts scrolling and drawing to the current page (or lifts the restriction).
+    /// Restricts scrolling and drawing to the current page, or spread (or lifts the restriction).
     private func applySinglePage() {
         let clip = scrollView.contentView as? CenteringClipView
-        guard let page = singlePage.map({ min(max($0, 0), layout.pageCount - 1) }) else {
+        guard let page = singlePage, !layout.rows.isEmpty else {
             clip?.allowedRect = nil
             motion.ySpan = nil
-            documentView.showOnly(page: nil)
+            documentView.showOnly(pages: nil)
             return
         }
-        singlePage = page
-        let frame = layout.pageFrames[page]
+        // The layout may have changed (a reload, or a spread toggled): show the row the page is in now.
+        let row = layout.rowIndex(ofPage: page)
+        singlePage = layout.rows[row].lowerBound
+        let frame = layout.rowFrames[row]
         let area = CGRect(x: 0, y: frame.minY - layout.gap / 2, width: layout.size.width, height: frame.height + layout.gap)
         clip?.allowedRect = area
         motion.ySpan = area.minY...area.maxY
-        documentView.showOnly(page: page)
+        documentView.showOnly(pages: layout.rows[row])
     }
 
     /// In single-page mode, a scroll that would go past the page's edge turns the page instead.
@@ -782,21 +856,20 @@ final class DocumentViewController: NSViewController {
 
     private func turnPage(by delta: Int) {
         guard let page = singlePage else { return }
-        let target = page + delta
-        guard (0..<layout.pageCount).contains(target) else { return NSSound.beep() }
+        let target = layout.rowIndex(ofPage: page) + delta
+        guard layout.rows.indices.contains(target) else { return NSSound.beep() }
         pill.flash()
-        let frame = layout.pageFrames[target]
+        let frame = layout.rowFrames[target]
         // Forward lands on the new page's top; backward on its bottom, as if scrolling on.
         let y = delta > 0 ? frame.minY - layout.gap / 2 : frame.maxY + layout.gap / 2 - motion.viewport.height
-        singlePage = target
+        singlePage = layout.rows[target].lowerBound
         applySinglePage()
         motion.cut(toY: y)
     }
 
     /// Scroll to a remembered position (marks, jump list).
     private func go(to position: PagePosition) {
-        let page = min(max(position.page, 0), layout.pageCount - 1)
-        documentView.ensureThumbnails(page...page + 1)
+        ensureThumbnails(fromPage: position.page)
         goY(layout.y(for: position))
     }
 
@@ -827,7 +900,7 @@ final class DocumentViewController: NSViewController {
     private func fitPage() {
         zoomMode = .fitPage
         let page = layout.pageIndex(atY: motion.origin.y + motion.viewport.height / 2)
-        let frame = layout.pageFrames[page]
+        let frame = layout.rowFrames[layout.rowIndex(ofPage: page)]
         let target = layout.fitPageMagnification(page: page, viewport: scrollView.contentSize)
         let viewPoint = CGPoint(x: scrollView.contentSize.width / 2, y: scrollView.contentSize.height / 2)
         let anchor = CGPoint(x: motion.origin.x + motion.viewport.width / 2, y: motion.origin.y + motion.viewport.height / 2)
@@ -863,7 +936,7 @@ extension DocumentViewController: SearchHost, HintHost {
     func searchAnchor() -> (page: Int, y: CGFloat) {
         let y = motion.origin.y
         let page = layout.pageIndex(atY: y)
-        return (page, y - layout.pageFrames[page].minY)
+        return (page, y - layout.origin(ofPage: page).y)
     }
 
     func show(_ match: SearchMatch) {
@@ -892,16 +965,16 @@ extension DocumentViewController: SearchHost, HintHost {
         guard let pages = layout.pages(inYRange: visible.minY, visible.maxY) else { return [:] }
         var regions: [Int: CGRect] = [:]
         for index in pages {
-            let frame = layout.pageFrames[index]
-            let part = visible.intersection(frame)
-            if !part.isNull { regions[index] = part.offsetBy(dx: -frame.minX, dy: -frame.minY) }
+            let part = visible.intersection(layout.pageFrames[index])
+            let origin = layout.origin(ofPage: index)
+            if !part.isNull { regions[index] = part.offsetBy(dx: -origin.x, dy: -origin.y) }
         }
         return regions
     }
 
     func overlayPoint(page: Int, point: CGPoint) -> CGPoint {
-        let frame = layout.pageFrames[page]
-        let documentPoint = CGPoint(x: frame.minX + point.x, y: frame.minY + point.y)
+        let origin = layout.origin(ofPage: page)
+        let documentPoint = CGPoint(x: origin.x + point.x, y: origin.y + point.y)
         return hints.overlay.convert(documentPoint, from: documentView)
     }
 
@@ -910,7 +983,7 @@ extension DocumentViewController: SearchHost, HintHost {
     }
 
     func hintChosen(_ target: HintTarget, kind: HintKind) {
-        let frame = layout.pageFrames[target.page]
+        let origin = layout.origin(ofPage: target.page)
         switch (kind, target) {
         case (.followLink, .link(let link)):
             follow(link)
@@ -919,7 +992,7 @@ extension DocumentViewController: SearchHost, HintHost {
         case (.visual(let linewise), .line(let line)):
             visual.begin(at: TextPosition(page: line.page, index: line.range.location), linewise: linewise)
         case (.inverseSearch, .line(let line)):
-            documentView.flash(line.rect.offsetBy(dx: frame.minX, dy: frame.minY))
+            documentView.flash(line.rect.offsetBy(dx: origin.x, dy: origin.y))
             let syncIndex = syncIndex
             Task {
                 guard let location = await syncIndex.location(page: line.page, x: line.rect.midX, y: line.rect.midY) else {
@@ -930,7 +1003,7 @@ extension DocumentViewController: SearchHost, HintHost {
         case (.yankLine, .line(let line)):
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(line.text, forType: .string)
-            documentView.flash(line.rect.offsetBy(dx: frame.minX, dy: frame.minY))
+            documentView.flash(line.rect.offsetBy(dx: origin.x, dy: origin.y))
         default:
             break
         }

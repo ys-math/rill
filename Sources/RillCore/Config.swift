@@ -17,6 +17,10 @@ public struct Config: Equatable, Sendable {
     public var pageGap: Double = 8
     /// Mark what changed in the margin after a recompile.
     public var changeMarkers = true
+    /// Pages side by side, two per row.
+    public var spread = PageLayout.Spread.off
+    /// Cut away the white margins around the text.
+    public var trim = false
     /// The effective bindings: defaults with the `[keys]` table applied.
     public var keymap: [String: Action] = KeyMap.defaults
 
@@ -90,6 +94,14 @@ public struct Config: Equatable, Sendable {
                     case "change_markers":
                         guard let b = value.bool else { warnWrongType(table, key, expected: "true or false", got: value); continue }
                         config.changeMarkers = b
+                    case "spread":
+                        guard let s = value.string, let spread = PageLayout.Spread(rawValue: s) else {
+                            warnings.append(#"[view] spread: expected "off", "pairs" or "book""#); continue
+                        }
+                        config.spread = spread
+                    case "trim":
+                        guard let b = value.bool else { warnWrongType(table, key, expected: "true or false", got: value); continue }
+                        config.trim = b
                     case "page_gap":
                         guard let gap = value.number, (0...100).contains(gap) else {
                             warnings.append("[view] page_gap: expected a number from 0 to 100"); continue

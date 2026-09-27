@@ -46,6 +46,8 @@ Compile with SyncTeX enabled (vimtex's latexmk defaults already pass `-synctex=1
 | `+` / `-` / `=` | Zoom in / out / 100% |
 | `w` / `z` | Fit width / fit page |
 | `s` | One page at a time ↔ continuous (at a page's edge, `j`/`Space` turn the page) |
+| `S` | Two-page spread: pairs (1–2, 3–4, …) → book style (1, 2–3, …) → one page per row |
+| `c` | Trim the white margins (measured per document; odd and even pages trimmed separately) |
 | `/` / `?` | Search forward / backward (smart-case; `Enter` accepts, `Esc` returns) |
 | `n` / `N` | Next / previous match |
 | `Esc` | Clear search highlights |
@@ -87,6 +89,8 @@ default_zoom = "fit-width"   # "fit-page", or a number like 1.25 (for documents 
 dark_mode = "system"         # "on" | "off" | "system" (follow macOS)
 page_gap = 8                 # points between pages
 change_markers = true        # mark changed lines in the margin after a recompile
+spread = "off"               # "pairs" (1–2, 3–4, …) | "book" (1, 2–3, …): two pages per row
+trim = false                 # cut away the white margins around the text
 
 [synctex]
 inverse_command = "nvim --headless -c \"VimtexInverseSearch %line '%file'\""   # also %column
@@ -112,7 +116,8 @@ Key notation follows Vim: `<C-d>` (control), `<M-x>` (option), `<S-Space>` (shif
 `search_backward`, `search_next`, `search_previous`, `clear_highlights`, `hint_follow_link`,
 `hint_inverse_search`, `hint_yank_line`, `toggle_dark_mode`, `toggle_status`, `show_cheatsheet`,
 `close_document`, `open_file`, `show_outline`, `toggle_single_page`, `alternate_file`,
-`hint_preview_link`, `visual_mode`, `visual_line_mode`, `reload`, `toggle_frame_hud`.
+`hint_preview_link`, `visual_mode`, `visual_line_mode`, `toggle_spread`, `toggle_trim`, `reload`,
+`toggle_frame_hud`.
 
 In the pickers, type to filter (fuzzy, smart-case), `↑`/`↓` or `⌃p`/`⌃n` to move, `Enter` to
 open, `Esc` to close. PDFs with the same name are shown with the folders that tell them apart

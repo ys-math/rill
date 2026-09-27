@@ -22,6 +22,8 @@ struct ConfigTests {
         dark_mode = "on"
         page_gap = 12
         change_markers = false
+        spread = "book"
+        trim = true
         [keys]
         "<C-f>" = "screen_down"
         "J" = "nop"
@@ -36,6 +38,8 @@ struct ConfigTests {
         #expect(config.darkMode == .on)
         #expect(config.pageGap == 12)
         #expect(!config.changeMarkers)
+        #expect(config.spread == .book)
+        #expect(config.trim)
         #expect(config.keymap["<C-f>"] == .screenDown)
         #expect(config.keymap["J"] == nil)
         #expect(config.keymap["<S-Down>"] == .pageNext)

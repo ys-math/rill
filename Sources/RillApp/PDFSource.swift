@@ -1,5 +1,7 @@
 import CoreGraphics
 import Foundation
+import RillCore
+import Synchronization
 
 /// An immutable snapshot of one PDF file, safe to render from any thread.
 ///
@@ -69,6 +71,29 @@ final class PDFSource: @unchecked Sendable { // `pool` is guarded by `lock`; eve
         context.clip(to: box)
         context.drawPDFPage(page)
         return context.makeImage()
+    }
+
+    /// Each page's content (anything not white) in display coordinates, nil for a blank page.
+    /// Renders every page small, in parallel: call it off the main thread.
+    func contentBoxes() -> [CGRect?] {
+        let scale: CGFloat = 0.25
+        let boxes = Mutex([CGRect?](repeating: nil, count: pageCount))
+        DispatchQueue.concurrentPerform(iterations: pageCount) { index in
+            let size = pageSizes[index]
+            guard let image = render(page: index, pixelRect: CGRect(x: 0, y: 0, width: size.width * scale, height: size.height * scale),
+                                     scale: scale),
+                  let data = image.dataProvider?.data, let bytes = CFDataGetBytePtr(data)
+            else { return }
+            let buffer = UnsafeRawBufferPointer(start: bytes, count: CFDataGetLength(data))
+            guard let pixels = ContentBounds.find(in: buffer, width: image.width, height: image.height,
+                                                  bytesPerRow: image.bytesPerRow, bytesPerPixel: image.bitsPerPixel / 8)
+            else { return }
+            // One pixel of slack each way: a pixel is 4 points at this scale.
+            let box = CGRect(x: (pixels.minX - 1) / scale, y: (pixels.minY - 1) / scale,
+                             width: (pixels.width + 2) / scale, height: (pixels.height + 2) / scale)
+            boxes.withLock { $0[index] = box }
+        }
+        return boxes.withLock { $0 }
     }
 
     // MARK: - Private
