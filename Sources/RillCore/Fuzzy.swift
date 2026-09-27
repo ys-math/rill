@@ -106,3 +106,33 @@ public func distinguishingNames(_ paths: [String]) -> [String] {
     }
     return paths.indices.map(name)
 }
+
+/// A picker query typed as a path: `~/github/ma`, `/Users/me/`, `./figs/`, `../`.
+public struct PathQuery: Equatable, Sendable {
+    /// Absolute folder to list, ending in "/".
+    public var directory: String
+    /// What's typed after the last "/", to filter that folder's entries by.
+    public var prefix: String
+    /// The query up to and including the last "/", as typed; completions are built on it.
+    public var typedDirectory: String
+
+    /// Nil when `query` doesn't look like a path. Relative paths are resolved against `base`
+    /// (the current PDF's folder).
+    public static func parse(_ query: String, home: String = NSHomeDirectory(), base: String? = nil) -> PathQuery? {
+        var typed = query
+        if typed == "~" { typed = "~/" }
+        guard typed.hasPrefix("/") || typed.hasPrefix("~/") || typed.hasPrefix("./") || typed.hasPrefix("../") else {
+            return nil
+        }
+        let slash = typed.lastIndex(of: "/")!
+        let typedDirectory = String(typed[...slash])
+        let prefix = String(typed[typed.index(after: slash)...])
+        var directory = expandHome(typedDirectory, home: home)
+        if !directory.hasPrefix("/") {
+            directory = (base ?? home) + "/" + directory
+        }
+        directory = URL(fileURLWithPath: directory).standardizedFileURL.path
+        if !directory.hasSuffix("/") { directory += "/" }
+        return PathQuery(directory: directory, prefix: prefix, typedDirectory: typedDirectory)
+    }
+}

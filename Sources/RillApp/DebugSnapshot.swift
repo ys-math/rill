@@ -25,7 +25,8 @@ enum DebugSnapshot {
                     document.feed(keys: step)
                 }
                 try? await Task.sleep(for: .seconds(0.6))
-                let picker = (window.windowController as? DocumentWindowController).map { $0.isPickerShowing ? $0.debugPicker : "-" } ?? "-"
+                let picker = (window.windowController as? DocumentWindowController)
+                    .map { $0.isPickerShowing ? "[\($0.debugPickerQuery)] \($0.debugPicker)" : "-" } ?? "-"
                 let windows = NSApp.windows.filter { $0.isVisible && $0.windowController is DocumentWindowController }.map(\.title)
                 log += "after \(step): \(document.debugStatus) picker=\(picker) windows=\(windows)\n"
             }
@@ -55,6 +56,7 @@ enum DebugSnapshot {
         "<S-Down>": (125, "\u{F701}", "\u{F701}", [.function, .numericPad, .shift]),
         "<C-o>": (31, "\u{0F}", "o", [.control]),
         "<C-^>": (22, "\u{1E}", "^", [.control, .shift]),
+        "<Tab>": (48, "\t", "\t", []),
         "<C-i>": (34, "\t", "i", [.control]),
     ]
 

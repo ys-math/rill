@@ -109,7 +109,10 @@ Key notation follows Vim: `<C-d>` (control), `<M-x>` (option), `<S-Space>` (shif
 
 In the pickers, type to filter (fuzzy, smart-case), `↑`/`↓` or `⌃p`/`⌃n` to move, `Enter` to
 open, `Esc` to close. PDFs with the same name are shown with the folders that tell them apart
-(`homological_algebra/main.pdf`), so typing a folder name finds them. Launching rill from the Dock or Spotlight with nothing open shows the
+(`homological_algebra/main.pdf`), so typing a folder name finds them; window and tab titles use
+the same names. To open by path, type one: `~/`, `/`, `./` or `../` (relative to the current PDF)
+lists that folder's sub-folders and PDFs; `Tab` completes, `Enter` enters a folder or opens a PDF.
+Launching rill from the Dock or Spotlight with nothing open shows the
 file picker.
 
 ## CLI

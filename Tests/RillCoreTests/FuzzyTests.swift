@@ -68,3 +68,30 @@ struct DistinguishingNameTests {
         #expect(distinguishingNames(["/a/x.pdf", "/a/x.pdf"]) == ["a/x.pdf", "a/x.pdf"])
     }
 }
+
+struct PathQueryTests {
+    @Test func notAPath() {
+        #expect(PathQuery.parse("homol") == nil)
+        #expect(PathQuery.parse("") == nil)
+    }
+
+    @Test func homeRelative() {
+        #expect(PathQuery.parse("~/github/ma", home: "/Users/me")
+                == PathQuery(directory: "/Users/me/github/", prefix: "ma", typedDirectory: "~/github/"))
+        #expect(PathQuery.parse("~", home: "/Users/me")
+                == PathQuery(directory: "/Users/me/", prefix: "", typedDirectory: "~/"))
+    }
+
+    @Test func absolute() {
+        #expect(PathQuery.parse("/tmp/x", home: "/Users/me")
+                == PathQuery(directory: "/tmp/", prefix: "x", typedDirectory: "/tmp/"))
+        #expect(PathQuery.parse("/", home: "/Users/me") == PathQuery(directory: "/", prefix: "", typedDirectory: "/"))
+    }
+
+    @Test func relativeToTheCurrentPDF() {
+        #expect(PathQuery.parse("./figs/a", home: "/Users/me", base: "/Users/me/paper")
+                == PathQuery(directory: "/Users/me/paper/figs/", prefix: "a", typedDirectory: "./figs/"))
+        #expect(PathQuery.parse("../other/", home: "/Users/me", base: "/Users/me/paper")
+                == PathQuery(directory: "/Users/me/other/", prefix: "", typedDirectory: "../other/"))
+    }
+}

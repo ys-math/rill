@@ -11,6 +11,10 @@ struct PickerEntry {
     var indent = 0
     /// Index into the caller's own list, returned on choice.
     var id: Int
+    /// What `Tab` puts in the query (path completion).
+    var completion: String? = nil
+    /// `Enter` replaces the query with `completion` instead of choosing (entering a folder).
+    var descends = false
 }
 
 /// Spotlight-style chooser: a query field over a ranked list. Used by the file picker (`o`)
@@ -25,6 +29,9 @@ final class PickerView: NSView, NSTextFieldDelegate, NSTableViewDataSource, NSTa
     var onClose: (() -> Void)?
     /// Loads a row's thumbnail, for pickers that have them.
     var thumbnail: ((PickerEntry) async -> NSImage?)?
+    /// Replaces the list for queries it recognises (paths, in the file picker): the entries to
+    /// show and the part of the query to rank them by. Nil for ordinary queries.
+    var dynamicEntries: ((String) -> (entries: [PickerEntry], rankBy: String)?)?
 
     let field = NSTextField()
     private let table = NSTableView()
@@ -151,6 +158,8 @@ final class PickerView: NSView, NSTextFieldDelegate, NSTableViewDataSource, NSTa
         table.scrollRowToVisible(row)
     }
 
+    var debugQuery: String { field.stringValue }
+
     var debugSummary: String {
         let selected = results.indices.contains(table.selectedRow) ? results[table.selectedRow].entry.title : "-"
         return "\(results.count) results, selected \(selected)"
@@ -165,7 +174,12 @@ final class PickerView: NSView, NSTextFieldDelegate, NSTableViewDataSource, NSTa
     // MARK: - Ranking
 
     private func rank() {
-        let query = field.stringValue
+        var query = field.stringValue
+        var entries = self.entries
+        if let dynamic = dynamicEntries?(query) {
+            entries = dynamic.entries
+            query = dynamic.rankBy
+        }
         if query.trimmingCharacters(in: .whitespaces).isEmpty {
             results = entries.prefix(Self.maxResults).map { ($0, []) }
         } else {
@@ -206,6 +220,7 @@ final class PickerView: NSView, NSTextFieldDelegate, NSTableViewDataSource, NSTa
         case #selector(NSResponder.moveDown(_:)): move(by: 1)
         case #selector(NSResponder.moveUp(_:)): move(by: -1)
         case #selector(NSResponder.insertNewline(_:)): choose(row: table.selectedRow)
+        case #selector(NSResponder.insertTab(_:)): complete()
         case #selector(NSResponder.cancelOperation(_:)): close()
         default: return false
         }
@@ -223,9 +238,24 @@ final class PickerView: NSView, NSTextFieldDelegate, NSTableViewDataSource, NSTa
         choose(row: table.clickedRow)
     }
 
+    /// `Tab`: put the selected entry's completion in the query.
+    private func complete() {
+        guard results.indices.contains(table.selectedRow), let completion = results[table.selectedRow].entry.completion else {
+            return NSSound.beep()
+        }
+        setQuery(completion)
+    }
+
+    private func setQuery(_ text: String) {
+        field.stringValue = text
+        field.currentEditor()?.selectedRange = NSRange(location: (text as NSString).length, length: 0)
+        rank()
+    }
+
     private func choose(row: Int) {
         guard results.indices.contains(row) else { return NSSound.beep() }
         let entry = results[row].entry
+        if entry.descends, let completion = entry.completion { return setQuery(completion) }
         close()
         onChoose?(entry)
     }
