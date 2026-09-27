@@ -184,7 +184,7 @@ final class DocumentViewController: NSViewController {
     }
 
     private func applyBackground() {
-        backdrop.apply(ConfigStore.shared.config.background, scrollView: scrollView, window: view.window)
+        backdrop.apply(ConfigStore.shared.config, scrollView: scrollView, window: view.window)
     }
 
     private func applyCorners() {

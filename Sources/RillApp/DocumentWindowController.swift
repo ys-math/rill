@@ -22,6 +22,8 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate {
     private var pickerSearch: Task<Void, Never>?
     private var reloader: DocumentReloader?
     private let placeholder = NSTextField(labelWithString: "")
+    /// Behind the placeholder, so an empty window matches `[view] background` like a document does.
+    private let placeholderBackdrop = Backdrop()
 
     init(url: URL?, store: DocumentStateStore) {
         self.store = store
@@ -43,6 +45,10 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate {
         placeholder.textColor = .tertiaryLabelColor
         placeholder.font = .monospacedSystemFont(ofSize: 13, weight: .regular)
         placeholder.alignment = .center
+        placeholderBackdrop.translatesAutoresizingMaskIntoConstraints = false
+        NotificationCenter.default.addObserver(forName: .rillConfigDidChange, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.applyPlaceholderBackground() }
+        }
         load(url)
     }
 
@@ -216,16 +222,24 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate {
         let container = NSView()
         placeholder.stringValue = message
         placeholder.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(placeholderBackdrop)
         container.addSubview(placeholder)
         NSLayoutConstraint.activate([
+            placeholderBackdrop.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            placeholderBackdrop.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            placeholderBackdrop.topAnchor.constraint(equalTo: container.topAnchor),
+            placeholderBackdrop.bottomAnchor.constraint(equalTo: container.bottomAnchor),
             placeholder.centerXAnchor.constraint(equalTo: container.centerXAnchor),
             placeholder.centerYAnchor.constraint(equalTo: container.centerYAnchor),
         ])
         window?.contentViewController = nil
         window?.contentView = container
-        // A see-through background belonged to the document; the message needs something behind it.
-        window?.isOpaque = true
-        window?.backgroundColor = .windowBackgroundColor
+        applyPlaceholderBackground()
+    }
+
+    private func applyPlaceholderBackground() {
+        guard documentController == nil else { return }
+        placeholderBackdrop.apply(ConfigStore.shared.config, window: window)
     }
 
     // Nothing in the document view takes focus, so keys travel up the responder chain

@@ -17,6 +17,11 @@ public struct Config: Equatable, Sendable {
         case glass
     }
 
+    /// `.clear` is more see-through than the default `.regular`.
+    public enum GlassStyle: String, Sendable, CaseIterable {
+        case regular, clear
+    }
+
     /// The material of the search bar, status pill, toasts, picker and cheatsheet.
     public enum OverlayStyle: String, Sendable, CaseIterable {
         case blur, glass
@@ -37,6 +42,9 @@ public struct Config: Equatable, Sendable {
     /// Cut away the white margins around the text.
     public var trim = false
     public var background = Background.solid
+    /// How the `glass` background looks: its style, and a colour (with alpha) to tint it toward.
+    public var glassStyle = GlassStyle.regular
+    public var glassTint: RGBColor?
     /// Corner radius of the pages in page points (0 for square corners).
     public var cornerRadius: Double = 0
     /// `j`/`k`/`h`/`l`: a fraction of the viewport.
@@ -159,6 +167,16 @@ public struct Config: Equatable, Sendable {
                             warnings.append(#"[view] background: expected "solid", "blur" or "glass""#); continue
                         }
                         config.background = background
+                    case "glass_style":
+                        guard let s = value.string, let style = GlassStyle(rawValue: s) else {
+                            warnings.append(#"[view] glass_style: expected "regular" or "clear""#); continue
+                        }
+                        config.glassStyle = style
+                    case "glass_tint":
+                        guard let s = value.string, let color = RGBColor(hexWithAlpha: s) else {
+                            warnings.append(##"[view] glass_tint: expected a colour like "#1d2021" or "#1d202180""##); continue
+                        }
+                        config.glassTint = color
                     case "overlays":
                         guard let s = value.string, let style = OverlayStyle(rawValue: s) else {
                             warnings.append(#"[view] overlays: expected "blur" or "glass""#); continue
@@ -195,17 +213,25 @@ public struct Config: Equatable, Sendable {
 /// An sRGB colour, components 0–1.
 public struct RGBColor: Equatable, Sendable {
     public var red, green, blue: Double
+    public var alpha: Double
 
-    public init(red: Double, green: Double, blue: Double) {
-        (self.red, self.green, self.blue) = (red, green, blue)
+    public init(red: Double, green: Double, blue: Double, alpha: Double = 1) {
+        (self.red, self.green, self.blue, self.alpha) = (red, green, blue, alpha)
     }
 
     /// `#rrggbb`; nil for anything else.
     public init?(hex: String) {
-        guard hex.count == 7, hex.first == "#", let value = UInt32(hex.dropFirst(), radix: 16),
+        guard hex.count == 7 else { return nil }
+        self.init(hexWithAlpha: hex)
+    }
+
+    /// `#rrggbb` or `#rrggbbaa`; nil for anything else.
+    public init?(hexWithAlpha hex: String) {
+        guard hex.count == 7 || hex.count == 9, hex.first == "#", let value = UInt32(hex.dropFirst(), radix: 16),
               hex.dropFirst().allSatisfy(\.isHexDigit)
         else { return nil }
-        self.init(red: Double(value >> 16 & 0xff) / 255, green: Double(value >> 8 & 0xff) / 255,
-                  blue: Double(value & 0xff) / 255)
+        let rgb = hex.count == 9 ? value >> 8 : value
+        self.init(red: Double(rgb >> 16 & 0xff) / 255, green: Double(rgb >> 8 & 0xff) / 255,
+                  blue: Double(rgb & 0xff) / 255, alpha: hex.count == 9 ? Double(value & 0xff) / 255 : 1)
     }
 }
