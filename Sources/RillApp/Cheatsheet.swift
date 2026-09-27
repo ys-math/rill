@@ -41,7 +41,7 @@ final class Cheatsheet: NSView {
     var isShowing: Bool { !isHidden }
 
     func show(keymap: [String: Action]) {
-        panel.subviews.filter { $0 !== backing }.forEach { $0.removeFromSuperview() }
+        panel.contentSubviews.filter { $0 !== backing }.forEach { $0.removeFromSuperview() }
 
         // Every sequence bound to each action, shortest first.
         var keys: [Action: [String]] = [:]

@@ -46,6 +46,14 @@ final class DocumentView: NSView {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
+    /// Rounds the corners of every page (0 for square ones).
+    var pageCornerRadius: CGFloat = 0 {
+        didSet {
+            guard pageCornerRadius != oldValue else { return }
+            for page in pages { page.setCornerRadius(pageCornerRadius) }
+        }
+    }
+
     override var isFlipped: Bool { true }
     override var isOpaque: Bool { false }
 
@@ -383,6 +391,12 @@ private final class PageLayer: CALayer {
         layer.actions = Self.noActions
         addSublayer(layer)
         overlays[key] = layer
+    }
+
+    func setCornerRadius(_ radius: CGFloat) {
+        cornerRadius = radius
+        content.cornerRadius = radius
+        shadowPath = CGPath(roundedRect: bounds, cornerWidth: radius, cornerHeight: radius, transform: nil)
     }
 
     func setThumbnail(_ image: CGImage) {

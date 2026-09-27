@@ -7,6 +7,21 @@ public struct Config: Equatable, Sendable {
         case system, on, off
     }
 
+    /// What shows around the pages.
+    public enum Background: String, Sendable, CaseIterable {
+        /// A plain gray.
+        case solid
+        /// Whatever is behind the window, blurred.
+        case blur
+        /// Liquid Glass over whatever is behind the window.
+        case glass
+    }
+
+    /// The material of the search bar, status pill, toasts, picker and cheatsheet.
+    public enum OverlayStyle: String, Sendable, CaseIterable {
+        case blur, glass
+    }
+
     public var pickerRoots: [String] = []
     public var inverseCommand = InverseSearchCommand.vimtexDefault
     /// Bundle ID of the app to bring forward after inverse search (the terminal running Neovim).
@@ -21,6 +36,10 @@ public struct Config: Equatable, Sendable {
     public var spread = PageLayout.Spread.off
     /// Cut away the white margins around the text.
     public var trim = false
+    public var background = Background.solid
+    /// Round the corners of the pages.
+    public var roundedCorners = false
+    public var overlays = OverlayStyle.blur
     /// The effective bindings: defaults with the `[keys]` table applied.
     public var keymap: [String: Action] = KeyMap.defaults
 
@@ -102,6 +121,19 @@ public struct Config: Equatable, Sendable {
                     case "trim":
                         guard let b = value.bool else { warnWrongType(table, key, expected: "true or false", got: value); continue }
                         config.trim = b
+                    case "rounded_corners":
+                        guard let b = value.bool else { warnWrongType(table, key, expected: "true or false", got: value); continue }
+                        config.roundedCorners = b
+                    case "background":
+                        guard let s = value.string, let background = Background(rawValue: s) else {
+                            warnings.append(#"[view] background: expected "solid", "blur" or "glass""#); continue
+                        }
+                        config.background = background
+                    case "overlays":
+                        guard let s = value.string, let style = OverlayStyle(rawValue: s) else {
+                            warnings.append(#"[view] overlays: expected "blur" or "glass""#); continue
+                        }
+                        config.overlays = style
                     case "page_gap":
                         guard let gap = value.number, (0...100).contains(gap) else {
                             warnings.append("[view] page_gap: expected a number from 0 to 100"); continue

@@ -14,6 +14,7 @@ final class DocumentViewController: NSViewController {
     private let scrollView = DocumentScrollView(frame: .zero)
     private var documentView: DocumentView
     private let hud = FrameHUD(frame: .zero)
+    private let backdrop = Backdrop()
     private lazy var motion = Motion(scrollView: scrollView)
     private var resolver = KeyResolver(keymap: ConfigStore.shared.config.keymap)
     private var zoomMode = ZoomMode.fitWidth
@@ -82,14 +83,19 @@ final class DocumentViewController: NSViewController {
         let container = NSView()
         scrollView.documentView = documentView
         scrollView.translatesAutoresizingMaskIntoConstraints = false
+        backdrop.translatesAutoresizingMaskIntoConstraints = false
         hud.translatesAutoresizingMaskIntoConstraints = false
         hints.overlay.translatesAutoresizingMaskIntoConstraints = false
         search.bar.translatesAutoresizingMaskIntoConstraints = false
         toast.translatesAutoresizingMaskIntoConstraints = false
         pill.translatesAutoresizingMaskIntoConstraints = false
         cheatsheet.translatesAutoresizingMaskIntoConstraints = false
-        for subview in [scrollView, hints.overlay, search.bar, toast, pill, cheatsheet, hud] { container.addSubview(subview) }
+        for subview in [backdrop, scrollView, hints.overlay, search.bar, toast, pill, cheatsheet, hud] { container.addSubview(subview) }
         NSLayoutConstraint.activate([
+            backdrop.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            backdrop.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            backdrop.topAnchor.constraint(equalTo: container.topAnchor),
+            backdrop.bottomAnchor.constraint(equalTo: container.bottomAnchor),
             scrollView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: container.trailingAnchor),
             scrollView.topAnchor.constraint(equalTo: container.topAnchor),
@@ -159,10 +165,20 @@ final class DocumentViewController: NSViewController {
     private func configDidChange() {
         let config = ConfigStore.shared.config
         resolver = KeyResolver(keymap: config.keymap)
+        applyBackground()
+        applyCorners()
         if layout != makeLayout(for: source) || documentView.dark != Self.wantsDark(override: darkOverride) {
             rebuild()
         }
         measureTrimIfNeeded()
+    }
+
+    private func applyBackground() {
+        backdrop.apply(ConfigStore.shared.config.background, scrollView: scrollView, window: view.window)
+    }
+
+    private func applyCorners() {
+        documentView.pageCornerRadius = ConfigStore.shared.config.roundedCorners ? 6 : 0
     }
 
     private func appearanceDidChange() {
@@ -288,6 +304,7 @@ final class DocumentViewController: NSViewController {
         documentView.onCommandClick = { [weak self] in self?.inverseSearch(at: $0) }
         documentView.onClick = { [weak self] in self?.click(at: $0) }
         documentView.onHover = { [weak self] in self?.hover(at: $0) }
+        applyCorners()
     }
 
     // MARK: - Links: click, hover, preview
@@ -515,6 +532,11 @@ final class DocumentViewController: NSViewController {
     }
 
     private var backingScale: CGFloat { view.window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2 }
+
+    override func viewWillAppear() {
+        super.viewWillAppear()
+        applyBackground()
+    }
 
     override func viewDidAppear() {
         super.viewDidAppear()

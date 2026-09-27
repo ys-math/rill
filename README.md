@@ -91,6 +91,9 @@ page_gap = 8                 # points between pages
 change_markers = true        # mark changed lines in the margin after a recompile
 spread = "off"               # "pairs" (1–2, 3–4, …) | "book" (1, 2–3, …): two pages per row
 trim = false                 # cut away the white margins around the text
+rounded_corners = false      # round the corners of the pages
+background = "solid"         # "blur" (the desktop, blurred) | "glass" (Liquid Glass): around the pages
+overlays = "blur"            # "glass": Liquid Glass for the search bar, status, toasts, picker, cheatsheet
 
 [synctex]
 inverse_command = "nvim --headless -c \"VimtexInverseSearch %line '%file'\""   # also %column

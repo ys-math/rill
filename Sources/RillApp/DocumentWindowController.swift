@@ -223,6 +223,9 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate {
         ])
         window?.contentViewController = nil
         window?.contentView = container
+        // A see-through background belonged to the document; the message needs something behind it.
+        window?.isOpaque = true
+        window?.backgroundColor = .windowBackgroundColor
     }
 
     // Nothing in the document view takes focus, so keys travel up the responder chain

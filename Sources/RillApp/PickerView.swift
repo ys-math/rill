@@ -51,9 +51,13 @@ final class PickerView: NSView, NSTextFieldDelegate, NSTableViewDataSource, NSTa
         addSubview(panel)
         let backing = NSView()
         backing.wantsLayer = true
-        backing.layer?.backgroundColor = NSColor.windowBackgroundColor.withAlphaComponent(0.97).cgColor
         backing.translatesAutoresizingMaskIntoConstraints = false
         panel.addSubview(backing)
+        // Nearly opaque over the blur so rows read over any page; glass carries its own contrast.
+        panel.onStyleChange = { [weak backing] style in
+            backing?.layer?.backgroundColor = style == .glass
+                ? .clear : NSColor.windowBackgroundColor.withAlphaComponent(0.97).cgColor
+        }
 
         field.isBordered = false
         field.drawsBackground = false

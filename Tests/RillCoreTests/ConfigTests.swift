@@ -24,6 +24,9 @@ struct ConfigTests {
         change_markers = false
         spread = "book"
         trim = true
+        rounded_corners = true
+        background = "glass"
+        overlays = "glass"
         [keys]
         "<C-f>" = "screen_down"
         "J" = "nop"
@@ -40,6 +43,9 @@ struct ConfigTests {
         #expect(!config.changeMarkers)
         #expect(config.spread == .book)
         #expect(config.trim)
+        #expect(config.roundedCorners)
+        #expect(config.background == .glass)
+        #expect(config.overlays == .glass)
         #expect(config.keymap["<C-f>"] == .screenDown)
         #expect(config.keymap["J"] == nil)
         #expect(config.keymap["<S-Down>"] == .pageNext)
@@ -54,6 +60,8 @@ struct ConfigTests {
         dark_mode = true
         page_gap = 500
         colour = "red"
+        background = "frosted"
+        overlays = 1
         [keys]
         "x" = "explode"
         "y" = 3
@@ -65,9 +73,11 @@ struct ConfigTests {
             #"[fonts]: unknown table"#,
             #"[keys] x: unknown action explode"#,
             #"[keys] y: expected an action name, got integer"#,
+            #"[view] background: expected "solid", "blur" or "glass""#,
             #"[view] colour: unknown setting"#,
             #"[view] dark_mode: expected "system", "on" or "off""#,
             #"[view] default_zoom: expected "fit-width", "fit-page" or a number"#,
+            #"[view] overlays: expected "blur" or "glass""#,
             #"[view] page_gap: expected a number from 0 to 100"#,
             "stray: settings belong in a [table]",
         ])
