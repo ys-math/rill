@@ -6,9 +6,13 @@ import RillCore
 /// writes the window's layer tree to a PNG and quits.
 @MainActor
 enum DebugSnapshot {
+    /// Once per process: a script that loads another document (⌃^, the picker) must not start again.
+    private static var started = false
+
     static func runIfRequested(window: NSWindow, document: DocumentViewController) {
         let env = ProcessInfo.processInfo.environment
-        guard let path = env["RILL_SNAPSHOT"] else { return }
+        guard let path = env["RILL_SNAPSHOT"], !started else { return }
+        started = true
         let steps = (env["RILL_SNAPSHOT_KEYS"] ?? "").split(separator: " ").map(String.init)
 
         Task { @MainActor in
@@ -21,7 +25,8 @@ enum DebugSnapshot {
                     document.feed(keys: step)
                 }
                 try? await Task.sleep(for: .seconds(0.6))
-                let picker = (window.windowController as? DocumentWindowController).map { $0.isPickerShowing ? $0.debugPicker : "-" } ?? "-"
+                let picker = (window.windowController as? DocumentWindowController)
+                    .map { $0.isPickerShowing ? "[\($0.debugPickerQuery)] \($0.debugPicker)" : "-" } ?? "-"
                 let windows = NSApp.windows.filter { $0.isVisible && $0.windowController is DocumentWindowController }.map(\.title)
                 log += "after \(step): \(document.debugStatus) picker=\(picker) windows=\(windows)\n"
             }
@@ -50,6 +55,8 @@ enum DebugSnapshot {
         "<BS>": (51, "\u{7F}", "\u{7F}", []),
         "<S-Down>": (125, "\u{F701}", "\u{F701}", [.function, .numericPad, .shift]),
         "<C-o>": (31, "\u{0F}", "o", [.control]),
+        "<C-^>": (22, "\u{1E}", "^", [.control, .shift]),
+        "<Tab>": (48, "\t", "\t", []),
         "<C-i>": (34, "\t", "i", [.control]),
     ]
 

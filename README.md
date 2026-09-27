@@ -57,6 +57,7 @@ Compile with SyncTeX enabled (vimtex's latexmk defaults already pass `-synctex=1
 | `''` | Back to where the last jump started |
 | `o` / `⌘O` | Open a PDF: recent files, then PDFs under `[picker] roots` |
 | `⌘⇧O` | Open with the standard macOS panel |
+| `⌃^` / `⌃6` | Previous PDF: its window if open, otherwise it replaces this one (press again to toggle back) |
 | `t` | Go to a section (the PDF's outline) |
 | `i` | Dark mode on / off |
 | `g.` | Keep the page / zoom status visible |
@@ -103,10 +104,15 @@ Key notation follows Vim: `<C-d>` (control), `<M-x>` (option), `<S-Space>` (shif
 `fit_width`, `fit_page`, `jump_back`, `jump_forward`, `set_mark`, `goto_mark`, `search_forward`,
 `search_backward`, `search_next`, `search_previous`, `clear_highlights`, `hint_follow_link`,
 `hint_inverse_search`, `hint_yank_line`, `toggle_dark_mode`, `toggle_status`, `show_cheatsheet`,
-`close_document`, `open_file`, `show_outline`, `toggle_single_page`, `reload`, `toggle_frame_hud`.
+`close_document`, `open_file`, `show_outline`, `toggle_single_page`, `alternate_file`, `reload`,
+`toggle_frame_hud`.
 
 In the pickers, type to filter (fuzzy, smart-case), `↑`/`↓` or `⌃p`/`⌃n` to move, `Enter` to
-open, `Esc` to close. Launching rill from the Dock or Spotlight with nothing open shows the
+open, `Esc` to close. PDFs with the same name are shown with the folders that tell them apart
+(`homological_algebra/main.pdf`), so typing a folder name finds them; window and tab titles use
+the same names. To open by path, type one: `~/`, `/`, `./` or `../` (relative to the current PDF)
+lists that folder's sub-folders and PDFs; `Tab` completes, `Enter` enters a folder or opens a PDF.
+Launching rill from the Dock or Spotlight with nothing open shows the
 file picker.
 
 ## CLI

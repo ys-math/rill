@@ -12,8 +12,13 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate {
     private var documentController: DocumentViewController?
     /// Open a file chosen in the picker (the app decides which window it goes in).
     var onOpen: ((URL) -> Void)?
+    /// `⌃^` in this window.
+    var onAlternate: (() -> Void)?
     private let filePicker = PickerView()
     private var pickerPaths: [String] = []
+    /// Path mode: what the typed folder contains. Ids start at `pathIDBase`.
+    private var pathItems: [(path: String, isDirectory: Bool)] = []
+    private static let pathIDBase = 1_000_000
     private var pickerSearch: Task<Void, Never>?
     private var reloader: DocumentReloader?
     private let placeholder = NSTextField(labelWithString: "")
@@ -59,6 +64,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate {
             let controller = DocumentViewController(source: source, state: store.state(forPath: url.path))
             store.touch(url.path)
             controller.onOpenFileRequested = { [weak self] in self?.showFilePicker() }
+            controller.onAlternateRequested = { [weak self] in self?.onAlternate?() }
             documentController = controller
             window.contentViewController = controller
             window.setContentSize(NSSize(width: 900, height: 1100))
@@ -83,9 +89,9 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate {
 
     /// Shows a message in this window. Returns false if there's no document to show it in.
     @discardableResult
-    func showToast(_ message: String) -> Bool {
+    func showToast(_ message: String, briefly: Bool = false) -> Bool {
         guard let documentController, documentController.isViewLoaded else { return false }
-        documentController.showToast(message)
+        documentController.showToast(message, briefly: briefly)
         return true
     }
 
@@ -98,18 +104,19 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate {
         let recents = FileCatalog.recents(from: store).filter { $0 != url?.path }
         pickerPaths = recents
         filePicker.thumbnail = { [weak self] entry in
-            guard let self, self.pickerPaths.indices.contains(entry.id) else { return nil }
-            return await FileCatalog.thumbnail(for: self.pickerPaths[entry.id], size: CGSize(width: 26, height: 34))
+            guard let self, let path = self.pickerPath(for: entry), path.lowercased().hasSuffix(".pdf") else { return nil }
+            return await FileCatalog.thumbnail(for: path, size: CGSize(width: 26, height: 34))
         }
         filePicker.onChoose = { [weak self] entry in
-            guard let self, self.pickerPaths.indices.contains(entry.id) else { return }
-            self.onOpen?(URL(fileURLWithPath: self.pickerPaths[entry.id]))
+            guard let self, let path = self.pickerPath(for: entry) else { return }
+            self.onOpen?(URL(fileURLWithPath: path))
         }
+        filePicker.dynamicEntries = { [weak self] query in self?.pathEntries(for: query) }
         filePicker.onClose = { [weak self] in
             self?.pickerSearch?.cancel()
             self?.window?.makeFirstResponder(nil)
         }
-        filePicker.present(in: container, placeholder: "Open PDF…", entries: entries(for: recents, from: 0), rowHeight: 42)
+        filePicker.present(in: container, placeholder: "Open PDF…", entries: pickerEntries(), rowHeight: 42)
 
         let roots = ConfigStore.shared.config.pickerRoots
         guard !roots.isEmpty else {
@@ -121,18 +128,60 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate {
             let found = await FileCatalog.pdfs(under: roots)
             guard !Task.isCancelled, let self, self.filePicker.isShowing else { return }
             let known = Set(self.pickerPaths).union([self.url?.path].compactMap { $0 })
-            let more = found.filter { !known.contains($0) }
-            let first = self.pickerPaths.count
-            self.pickerPaths += more
+            self.pickerPaths += found.filter { !known.contains($0) }
             self.filePicker.setStatus("")
-            self.filePicker.append(self.entries(for: more, from: first))
+            // New arrivals can make an earlier name ambiguous, so name everything afresh.
+            self.filePicker.setEntries(self.pickerEntries())
         }
     }
 
-    private func entries(for paths: [String], from first: Int) -> [PickerEntry] {
-        paths.enumerated().map { offset, path in
-            PickerEntry(title: (path as NSString).lastPathComponent,
-                        detail: abbreviateHome((path as NSString).deletingLastPathComponent), id: first + offset)
+    private func pickerPath(for entry: PickerEntry) -> String? {
+        if entry.id >= Self.pathIDBase {
+            let index = entry.id - Self.pathIDBase
+            return pathItems.indices.contains(index) ? pathItems[index].path : nil
+        }
+        return pickerPaths.indices.contains(entry.id) ? pickerPaths[entry.id] : nil
+    }
+
+    /// Path mode: a query like `~/github/ma` lists that folder's sub-folders and PDFs, ranked by
+    /// what follows the last "/". Tab completes; Enter enters a folder or opens a PDF.
+    private func pathEntries(for query: String) -> (entries: [PickerEntry], rankBy: String)? {
+        let base = url.map { ($0.path as NSString).deletingLastPathComponent }
+        guard let parsed = PathQuery.parse(query, base: base) else { return nil }
+        let showHidden = parsed.prefix.hasPrefix(".")
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: parsed.directory)) ?? []
+        var folders: [String] = [], files: [String] = []
+        for name in names where showHidden || !name.hasPrefix(".") {
+            var isDirectory: ObjCBool = false
+            guard FileManager.default.fileExists(atPath: parsed.directory + name, isDirectory: &isDirectory) else { continue }
+            if isDirectory.boolValue { folders.append(name) } else if name.lowercased().hasSuffix(".pdf") { files.append(name) }
+        }
+        let order: (String, String) -> Bool = { $0.localizedStandardCompare($1) == .orderedAscending }
+        pathItems = folders.sorted(by: order).map { (parsed.directory + $0, true) }
+            + files.sorted(by: order).map { (parsed.directory + $0, false) }
+        let entries = pathItems.enumerated().map { index, item in
+            let name = (item.path as NSString).lastPathComponent
+            return PickerEntry(title: item.isDirectory ? name + "/" : name, detail: item.isDirectory ? "folder" : "",
+                               id: Self.pathIDBase + index,
+                               completion: parsed.typedDirectory + name + (item.isDirectory ? "/" : ""),
+                               descends: item.isDirectory)
+        }
+        filePicker.setStatus(names.isEmpty && !FileManager.default.fileExists(atPath: parsed.directory) ? "no such folder" : "")
+        return (entries, parsed.prefix)
+    }
+
+    /// Window and tab title; the app passes a distinguishing name when others share this one.
+    func setDisplayTitle(_ title: String) {
+        window?.title = title
+    }
+
+    var debugPickerQuery: String { filePicker.debugQuery }
+
+    /// One entry per picker path. Files sharing a name are titled with the folders that tell
+    /// them apart ("homological_algebra/main.pdf"), so the folder can be typed to find them.
+    private func pickerEntries() -> [PickerEntry] {
+        zip(pickerPaths, distinguishingNames(pickerPaths)).enumerated().map { index, pair in
+            PickerEntry(title: pair.1, detail: abbreviateHome((pair.0 as NSString).deletingLastPathComponent), id: index)
         }
     }
 

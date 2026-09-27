@@ -43,6 +43,8 @@ public enum Action: String, CaseIterable, Sendable {
     case openFile = "open_file"
     case showOutline = "show_outline"
     case toggleSinglePage = "toggle_single_page"
+    /// `⌃^`: the previously used PDF (Vim's alternate file).
+    case alternateFile = "alternate_file"
 
     /// Actions followed by one more key that names their target, like `m` + `a`.
     public var takesArgument: Bool {
@@ -80,7 +82,7 @@ extension Action {
             .search
         case .hintFollowLink, .hintInverseSearch, .hintYankLine:
             .hints
-        case .reload, .toggleFrameHUD, .showCheatsheet, .closeDocument, .openFile:
+        case .reload, .toggleFrameHUD, .showCheatsheet, .closeDocument, .openFile, .alternateFile:
             .other
         }
     }
@@ -126,6 +128,7 @@ extension Action {
         case .openFile: "open a file"
         case .showOutline: "go to a section (outline)"
         case .toggleSinglePage: "one page at a time / continuous"
+        case .alternateFile: "previous PDF"
         }
     }
 }
@@ -152,6 +155,7 @@ public enum KeyMap {
         "f": .hintFollowLink, "F": .hintInverseSearch, "yf": .hintYankLine,
         "i": .toggleDarkMode, "g.": .toggleStatus, "g?": .showCheatsheet, "q": .closeDocument,
         "o": .openFile, "t": .showOutline, "s": .toggleSinglePage,
+        "<C-^>": .alternateFile, "<C-6>": .alternateFile,
     ]
 
     /// A binding as it reads on a Mac keyboard: "<C-d>" → "⌃d", "<S-Space>" → "⇧Space", "<Down>" → "↓".

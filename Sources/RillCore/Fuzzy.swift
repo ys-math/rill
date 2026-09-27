@@ -85,3 +85,54 @@ public func abbreviateHome(_ path: String, home: String = NSHomeDirectory()) -> 
 public func expandHome(_ path: String, home: String = NSHomeDirectory()) -> String {
     path == "~" ? home : path.hasPrefix("~/") ? home + path.dropFirst(1) : path
 }
+
+/// Names that tell files apart: the file name alone when it's unique, otherwise the shortest
+/// run of parent folders that makes it unique, e.g. `homological_algebra/main.pdf` next to
+/// `topology/main.pdf`.
+public func distinguishingNames(_ paths: [String]) -> [String] {
+    let components = paths.map { $0.split(separator: "/").map(String.init) }
+    var depth = [Int](repeating: 1, count: paths.count)
+    func name(_ i: Int) -> String { components[i].suffix(depth[i]).joined(separator: "/") }
+    while true {
+        let groups = Dictionary(grouping: paths.indices, by: name).values.filter { $0.count > 1 }
+        var grew = false
+        for group in groups {
+            for i in group where depth[i] < components[i].count {
+                depth[i] += 1
+                grew = true
+            }
+        }
+        if !grew { break }
+    }
+    return paths.indices.map(name)
+}
+
+/// A picker query typed as a path: `~/github/ma`, `/Users/me/`, `./figs/`, `../`.
+public struct PathQuery: Equatable, Sendable {
+    /// Absolute folder to list, ending in "/".
+    public var directory: String
+    /// What's typed after the last "/", to filter that folder's entries by.
+    public var prefix: String
+    /// The query up to and including the last "/", as typed; completions are built on it.
+    public var typedDirectory: String
+
+    /// Nil when `query` doesn't look like a path. Relative paths are resolved against `base`
+    /// (the current PDF's folder).
+    public static func parse(_ query: String, home: String = NSHomeDirectory(), base: String? = nil) -> PathQuery? {
+        var typed = query
+        if typed == "~" { typed = "~/" }
+        guard typed.hasPrefix("/") || typed.hasPrefix("~/") || typed.hasPrefix("./") || typed.hasPrefix("../") else {
+            return nil
+        }
+        let slash = typed.lastIndex(of: "/")!
+        let typedDirectory = String(typed[...slash])
+        let prefix = String(typed[typed.index(after: slash)...])
+        var directory = expandHome(typedDirectory, home: home)
+        if !directory.hasPrefix("/") {
+            directory = (base ?? home) + "/" + directory
+        }
+        directory = URL(fileURLWithPath: directory).standardizedFileURL.path
+        if !directory.hasSuffix("/") { directory += "/" }
+        return PathQuery(directory: directory, prefix: prefix, typedDirectory: typedDirectory)
+    }
+}

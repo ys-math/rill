@@ -107,6 +107,12 @@ struct KeyResolverTests {
         #expect(Action.scrollDown.isContinuous)
     }
 
+    @Test func alternateFileLikeVim() {
+        var r = KeyResolver()
+        #expect(r.feed("<C-^>") == .action(.alternateFile, count: nil))
+        #expect(r.feed("<C-6>") == .action(.alternateFile, count: nil))
+    }
+
     @Test func customKeymap() {
         var r = KeyResolver(keymap: ["<C-f>": .screenDown, "zz": .fitPage])
         #expect(r.feed("j") == .unbound)

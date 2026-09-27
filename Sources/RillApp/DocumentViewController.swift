@@ -28,6 +28,8 @@ final class DocumentViewController: NSViewController {
     var onReloadRequested: (() -> Void)?
     /// `o` was pressed.
     var onOpenFileRequested: (() -> Void)?
+    /// `⌃^` was pressed.
+    var onAlternateRequested: (() -> Void)?
     private let outlinePicker = PickerView()
     private var outline: [OutlineEntry] = []
 
@@ -156,9 +158,9 @@ final class DocumentViewController: NSViewController {
         replace(with: source)
     }
 
-    /// Longer-lived than command feedback: these (config problems) need reading.
-    func showToast(_ message: String) {
-        toast.show(message, for: .seconds(5))
+    /// Config problems stay up longer than command feedback: they need reading.
+    func showToast(_ message: String, briefly: Bool = false) {
+        briefly ? toast.show(message) : toast.show(message, for: .seconds(5))
     }
 
     override func viewDidLayout() {
@@ -504,6 +506,7 @@ final class DocumentViewController: NSViewController {
         case .openFile: onOpenFileRequested?()
         case .showOutline: showOutline()
         case .toggleSinglePage: toggleSinglePage()
+        case .alternateFile: onAlternateRequested?()
         }
     }
 
