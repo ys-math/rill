@@ -42,6 +42,7 @@ public enum Action: String, CaseIterable, Sendable {
     case closeDocument = "close_document"
     case openFile = "open_file"
     case showOutline = "show_outline"
+    case toggleSinglePage = "toggle_single_page"
 
     /// Actions followed by one more key that names their target, like `m` + `a`.
     public var takesArgument: Bool {
@@ -73,7 +74,7 @@ extension Action {
             .scroll
         case .pageNext, .pagePrev, .firstPage, .goToPage, .jumpBack, .jumpForward, .setMark, .goToMark, .showOutline:
             .jump
-        case .zoomIn, .zoomOut, .zoomReset, .fitWidth, .fitPage, .toggleDarkMode, .toggleStatus:
+        case .zoomIn, .zoomOut, .zoomReset, .fitWidth, .fitPage, .toggleDarkMode, .toggleStatus, .toggleSinglePage:
             .zoom
         case .searchForward, .searchBackward, .searchNext, .searchPrevious, .clearHighlights:
             .search
@@ -124,6 +125,7 @@ extension Action {
         case .closeDocument: "close document"
         case .openFile: "open a file"
         case .showOutline: "go to a section (outline)"
+        case .toggleSinglePage: "one page at a time / continuous"
         }
     }
 }
@@ -149,7 +151,7 @@ public enum KeyMap {
         "/": .searchForward, "?": .searchBackward, "n": .searchNext, "N": .searchPrevious,
         "f": .hintFollowLink, "F": .hintInverseSearch, "yf": .hintYankLine,
         "i": .toggleDarkMode, "g.": .toggleStatus, "g?": .showCheatsheet, "q": .closeDocument,
-        "o": .openFile, "t": .showOutline,
+        "o": .openFile, "t": .showOutline, "s": .toggleSinglePage,
     ]
 
     /// A binding as it reads on a Mac keyboard: "<C-d>" → "⌃d", "<S-Space>" → "⇧Space", "<Down>" → "↓".

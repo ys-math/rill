@@ -79,7 +79,7 @@ public enum UnixSocket {
 /// Listens on a Unix domain socket. Each connection's request line is handed to `handler`
 /// on `queue`; calling the supplied reply closure sends the response and closes the connection.
 public final class UnixSocketServer: @unchecked Sendable { // `listener` is only touched on `ioQueue`
-    public typealias Handler = (_ request: Data, _ reply: @escaping @Sendable (Data) -> Void) -> Void
+    public typealias Handler = @Sendable (_ request: Data, _ reply: @escaping @Sendable (Data) -> Void) -> Void
 
     public let path: String
     private let fd: Int32

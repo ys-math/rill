@@ -27,6 +27,21 @@ final class Motion {
     private var zoom: ZoomAnimation?
     private var continuous: Continuous?
 
+    /// Single-page mode: the vertical span (document points) scrolling must stay within.
+    var ySpan: ClosedRange<CGFloat>?
+
+    /// The allowed range for the viewport's top edge, for the current viewport size. A span
+    /// shorter than the viewport allows exactly one position: centred.
+    var yLimit: ClosedRange<CGFloat>? {
+        guard let span = ySpan else { return nil }
+        let height = viewport.height
+        guard span.upperBound - span.lowerBound > height else {
+            let centred = (span.lowerBound + span.upperBound) / 2 - height / 2
+            return centred...centred
+        }
+        return span.lowerBound...(span.upperBound - height)
+    }
+
     /// Called after every frame that moved or zoomed; `settled` is false while zoom is animating.
     var onFrame: ((_ settled: Bool) -> Void)?
 
@@ -123,6 +138,13 @@ final class Motion {
         case .horizontal: spring.target = clampX(target); xSpring = spring
         }
         start()
+    }
+
+    /// Moves straight to `y` behind a short crossfade: a page turn in single-page mode.
+    func cut(toY y: CGFloat) {
+        stop()
+        set(origin: CGPoint(x: origin.x, y: clampY(y)))
+        crossfade(duration: reduceMotion ? 0.12 : 0.18)
     }
 
     /// Stop everything immediately (the user grabbed the trackpad).
@@ -226,7 +248,9 @@ final class Motion {
 
     private func clampY(_ y: CGFloat) -> CGFloat {
         let height = scrollView.documentView?.frame.height ?? 0
-        return min(max(y, 0), max(height - viewport.height, 0))
+        let clamped = min(max(y, 0), max(height - viewport.height, 0))
+        guard let yLimit else { return clamped }
+        return min(max(y, yLimit.lowerBound), yLimit.upperBound)
     }
 
     private func clampX(_ x: CGFloat) -> CGFloat {

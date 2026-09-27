@@ -45,13 +45,25 @@ final class DocumentScrollView: NSScrollView {
     }
 }
 
-/// Centers the document when it's smaller than the viewport instead of pinning it top-left.
+/// Centers the document when it's smaller than the viewport instead of pinning it top-left,
+/// and keeps scrolling within `allowedRect` when set (single-page mode).
 final class CenteringClipView: NSClipView {
+    var allowedRect: CGRect?
+
     override func constrainBoundsRect(_ proposedBounds: NSRect) -> NSRect {
         var rect = super.constrainBoundsRect(proposedBounds)
         guard let document = documentView?.frame else { return rect }
-        if rect.width > document.width { rect.origin.x = document.midX - rect.width / 2 }
-        if rect.height > document.height { rect.origin.y = document.midY - rect.height / 2 }
+        let area = allowedRect ?? document
+        if rect.width > area.width || allowedRect == nil && rect.width > document.width {
+            rect.origin.x = area.midX - rect.width / 2
+        } else if allowedRect != nil {
+            rect.origin.x = min(max(rect.origin.x, area.minX), area.maxX - rect.width)
+        }
+        if rect.height > area.height {
+            rect.origin.y = area.midY - rect.height / 2
+        } else if allowedRect != nil {
+            rect.origin.y = min(max(rect.origin.y, area.minY), area.maxY - rect.height)
+        }
         return rect
     }
 }
