@@ -26,6 +26,10 @@ final class DocumentViewController: NSViewController {
 
     /// `r` was pressed.
     var onReloadRequested: (() -> Void)?
+    /// `o` was pressed.
+    var onOpenFileRequested: (() -> Void)?
+    private let outlinePicker = PickerView()
+    private var outline: [OutlineEntry] = []
 
     private let syncIndex: SyncIndex
     /// A forward-search target waiting for the first layout or an in-flight reload.
@@ -375,7 +379,8 @@ final class DocumentViewController: NSViewController {
         return "page=\(p.page + 1) offset=\(String(format: "%.3f", p.offset)) x=\(Int(motion.origin.x)) "
             + "dark=\(documentView.dark) gap=\(Int(layout.gap)) pill=\(pill.debugText.isEmpty ? "-" : pill.debugText) "
             + "cheatsheet=\(cheatsheet.isShowing) toast=\(toast.debugMessage.isEmpty ? "-" : toast.debugMessage) hints=\(hints.debugCount) search=\(search.debugStatus) marks=\(marks.keys.sorted().joined()) jumps=\(jumps.count) "
-            + "pasteboard=\(NSPasteboard.general.string(forType: .string)?.prefix(30) ?? "")"
+            + "pasteboard=\(NSPasteboard.general.string(forType: .string)?.prefix(30) ?? "") "
+            + "outline=\(outlinePicker.isShowing ? outlinePicker.debugSummary : "-")"
     }
 
     /// Feeds a key sequence as if typed, without continuous scrolling. For debugging and tests.
@@ -487,6 +492,8 @@ final class DocumentViewController: NSViewController {
             if !pill.pinned { pill.flash() }
         case .showCheatsheet: cheatsheet.show(keymap: ConfigStore.shared.config.keymap)
         case .closeDocument: view.window?.performClose(nil)
+        case .openFile: onOpenFileRequested?()
+        case .showOutline: showOutline()
         }
     }
 
@@ -511,6 +518,39 @@ final class DocumentViewController: NSViewController {
 
     func currentPosition() -> PagePosition {
         layout.position(atY: motion.origin.y)
+    }
+
+    private func showOutline() {
+        guard let index = textIndex() else { return }
+        Task { [weak self] in
+            let entries = await index.outline()
+            guard let self else { return }
+            guard !entries.isEmpty else { return self.toast.show("no outline in this PDF") }
+            self.outline = entries
+            self.outlinePicker.onChoose = { [weak self] in self?.goToOutlineEntry($0.id) }
+            self.outlinePicker.onClose = { [weak self] in self?.view.window?.makeFirstResponder(nil) }
+            self.outlinePicker.present(
+                in: self.view, placeholder: "Go to section…",
+                entries: entries.enumerated().map { i, e in PickerEntry(title: e.title, detail: "p. \(e.page + 1)", indent: e.depth, id: i) },
+                rowHeight: 26)
+            // Start at the section you're reading.
+            let here = self.currentPosition().page
+            if let current = entries.lastIndex(where: { $0.page <= here }) { self.outlinePicker.select(row: current) }
+        }
+    }
+
+    private func goToOutlineEntry(_ id: Int) {
+        guard outline.indices.contains(id) else { return }
+        let entry = outline[id]
+        guard entry.page < layout.pageCount else { return }
+        jumps.record(currentPosition())
+        pill.flash()
+        if let point = entry.point {
+            documentView.ensureThumbnails(entry.page...entry.page + 1)
+            motion.jump(toY: layout.pageFrames[entry.page].minY + point.y - motion.viewport.height * 0.05)
+        } else {
+            jump(toPage: entry.page)
+        }
     }
 
     /// Scroll to a remembered position (marks, jump list).

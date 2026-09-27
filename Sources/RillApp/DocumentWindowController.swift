@@ -10,6 +10,11 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate {
 
     private let store: DocumentStateStore
     private var documentController: DocumentViewController?
+    /// Open a file chosen in the picker (the app decides which window it goes in).
+    var onOpen: ((URL) -> Void)?
+    private let filePicker = PickerView()
+    private var pickerPaths: [String] = []
+    private var pickerSearch: Task<Void, Never>?
     private var reloader: DocumentReloader?
     private let placeholder = NSTextField(labelWithString: "")
 
@@ -51,6 +56,8 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate {
         do {
             let source = try PDFSource(url: url)
             let controller = DocumentViewController(source: source, state: store.state(forPath: url.path))
+            store.touch(url.path)
+            controller.onOpenFileRequested = { [weak self] in self?.showFilePicker() }
             documentController = controller
             window.contentViewController = controller
             window.setContentSize(NSSize(width: 900, height: 1100))
@@ -80,6 +87,73 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate {
         documentController.showToast(message)
         return true
     }
+
+    // MARK: - Opening files
+
+    /// `o` / ⌘O: recent files first, then PDFs under the configured roots as Spotlight finds them.
+    func showFilePicker() {
+        guard let window, let container = window.contentView else { return }
+        pickerSearch?.cancel()
+        let recents = FileCatalog.recents(from: store).filter { $0 != url?.path }
+        pickerPaths = recents
+        filePicker.thumbnail = { [weak self] entry in
+            guard let self, self.pickerPaths.indices.contains(entry.id) else { return nil }
+            return await FileCatalog.thumbnail(for: self.pickerPaths[entry.id], size: CGSize(width: 26, height: 34))
+        }
+        filePicker.onChoose = { [weak self] entry in
+            guard let self, self.pickerPaths.indices.contains(entry.id) else { return }
+            self.onOpen?(URL(fileURLWithPath: self.pickerPaths[entry.id]))
+        }
+        filePicker.onClose = { [weak self] in
+            self?.pickerSearch?.cancel()
+            self?.window?.makeFirstResponder(nil)
+        }
+        filePicker.present(in: container, placeholder: "Open PDF…", entries: entries(for: recents, from: 0), rowHeight: 42)
+
+        let roots = ConfigStore.shared.config.pickerRoots
+        guard !roots.isEmpty else {
+            filePicker.setStatus(recents.isEmpty ? "no recent files · set [picker] roots in config.toml" : "")
+            return
+        }
+        filePicker.setStatus("searching…")
+        pickerSearch = Task { [weak self] in
+            let found = await FileCatalog.pdfs(under: roots)
+            guard !Task.isCancelled, let self, self.filePicker.isShowing else { return }
+            let known = Set(self.pickerPaths).union([self.url?.path].compactMap { $0 })
+            let more = found.filter { !known.contains($0) }
+            let first = self.pickerPaths.count
+            self.pickerPaths += more
+            self.filePicker.setStatus("")
+            self.filePicker.append(self.entries(for: more, from: first))
+        }
+    }
+
+    private func entries(for paths: [String], from first: Int) -> [PickerEntry] {
+        paths.enumerated().map { offset, path in
+            PickerEntry(title: (path as NSString).lastPathComponent,
+                        detail: abbreviateHome((path as NSString).deletingLastPathComponent), id: first + offset)
+        }
+    }
+
+    /// ⌘O
+    @objc func openDocument(_ sender: Any?) {
+        showFilePicker()
+    }
+
+    /// ⌘⇧O: the standard open panel.
+    @objc func openWithPanel(_ sender: Any?) {
+        guard let window else { return }
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.pdf]
+        panel.allowsMultipleSelection = true
+        panel.beginSheetModal(for: window) { [weak self] response in
+            guard response == .OK else { return }
+            MainActor.assumeIsolated { for url in panel.urls { self?.onOpen?(url) } }
+        }
+    }
+
+    var isPickerShowing: Bool { filePicker.isShowing }
+    var debugPicker: String { filePicker.debugSummary }
 
     /// Records where the document is scrolled to. The store is written to disk by the app delegate.
     func saveState() {

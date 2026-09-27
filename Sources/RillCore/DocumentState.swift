@@ -102,6 +102,11 @@ public final class DocumentStateStore {
         }
     }
 
+    /// Marks `path` as just opened, so it moves to the top of the recent list.
+    public func touch(_ path: String) {
+        states[path]?.lastOpened = Date()
+    }
+
     /// Paths, most recently opened first.
     public func recentPaths(limit: Int = .max) -> [String] {
         states.sorted { $0.value.lastOpened > $1.value.lastOpened }.prefix(limit).map(\.key)

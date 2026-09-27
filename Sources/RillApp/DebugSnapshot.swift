@@ -21,7 +21,9 @@ enum DebugSnapshot {
                     document.feed(keys: step)
                 }
                 try? await Task.sleep(for: .seconds(0.6))
-                log += "after \(step): \(document.debugStatus)\n"
+                let picker = (window.windowController as? DocumentWindowController).map { $0.isPickerShowing ? $0.debugPicker : "-" } ?? "-"
+                let windows = NSApp.windows.filter { $0.isVisible && $0.windowController is DocumentWindowController }.map(\.title)
+                log += "after \(step): \(document.debugStatus) picker=\(picker) windows=\(windows)\n"
             }
             let delay = Double(env["RILL_SNAPSHOT_DELAY"] ?? "") ?? 1.0
             try? await Task.sleep(for: .seconds(delay))
@@ -57,7 +59,7 @@ enum DebugSnapshot {
         } else {
             let keyCodes: [Character: UInt16] = ["j": 38, "k": 40, "d": 2, "u": 32, "g": 5, "+": 24, "-": 27, "w": 13, "z": 6,
                                                  "/": 44, "?": 44, "n": 45, "m": 46, "'": 39, "f": 3, "y": 16, "a": 0, "s": 1,
-                                                 "i": 34, ".": 47, "!": 18, "q": 12]
+                                                 "i": 34, ".": 47, "!": 18, "q": 12, "t": 17, "o": 31]
             let c = Character(token)
             code = keyCodes[Character(c.lowercased())] ?? 0
             (characters, unmodified) = (token, token)
