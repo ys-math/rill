@@ -45,6 +45,11 @@ public enum Action: String, CaseIterable, Sendable {
     case toggleSinglePage = "toggle_single_page"
     /// `⌃^`: the previously used PDF (Vim's alternate file).
     case alternateFile = "alternate_file"
+    case hintPreviewLink = "hint_preview_link"
+    /// `v`: pick a line with a hint, then select characterwise.
+    case visualMode = "visual_mode"
+    /// `V`: the same, whole lines.
+    case visualLineMode = "visual_line_mode"
 
     /// Actions followed by one more key that names their target, like `m` + `a`.
     public var takesArgument: Bool {
@@ -80,7 +85,7 @@ extension Action {
             .zoom
         case .searchForward, .searchBackward, .searchNext, .searchPrevious, .clearHighlights:
             .search
-        case .hintFollowLink, .hintInverseSearch, .hintYankLine:
+        case .hintFollowLink, .hintInverseSearch, .hintYankLine, .hintPreviewLink, .visualMode, .visualLineMode:
             .hints
         case .reload, .toggleFrameHUD, .showCheatsheet, .closeDocument, .openFile, .alternateFile:
             .other
@@ -129,6 +134,9 @@ extension Action {
         case .showOutline: "go to a section (outline)"
         case .toggleSinglePage: "one page at a time / continuous"
         case .alternateFile: "previous PDF"
+        case .hintPreviewLink: "preview a link's target"
+        case .visualMode: "select text (from a line)"
+        case .visualLineMode: "select whole lines"
         }
     }
 }
@@ -156,6 +164,7 @@ public enum KeyMap {
         "i": .toggleDarkMode, "g.": .toggleStatus, "g?": .showCheatsheet, "q": .closeDocument,
         "o": .openFile, "t": .showOutline, "s": .toggleSinglePage,
         "<C-^>": .alternateFile, "<C-6>": .alternateFile,
+        "p": .hintPreviewLink, "v": .visualMode, "V": .visualLineMode,
     ]
 
     /// A binding as it reads on a Mac keyboard: "<C-d>" → "⌃d", "<S-Space>" → "⇧Space", "<Down>" → "↓".

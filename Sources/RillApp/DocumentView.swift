@@ -108,13 +108,36 @@ final class DocumentView: NSView {
 
     /// ⌘-click: a point in document coordinates.
     var onCommandClick: ((CGPoint) -> Void)?
+    /// A plain click (following a link under it).
+    var onClick: ((CGPoint) -> Void)?
+    /// The pointer moved over the document (link previews), or left it (nil).
+    var onHover: ((CGPoint?) -> Void)?
 
     override func mouseDown(with event: NSEvent) {
+        let point = convert(event.locationInWindow, from: nil)
         if event.modifierFlags.contains(.command) {
-            onCommandClick?(convert(event.locationInWindow, from: nil))
+            onCommandClick?(point)
+        } else if event.clickCount == 1 {
+            onClick?(point)
         } else {
             super.mouseDown(with: event)
         }
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if trackingAreas.isEmpty {
+            addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseMoved, .mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect],
+                                           owner: self, userInfo: nil))
+        }
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        onHover?(convert(event.locationInWindow, from: nil))
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        onHover?(nil)
     }
 
     /// Briefly highlights `rect` (document coordinates): the forward-search target.
@@ -161,6 +184,53 @@ final class DocumentView: NSView {
         for (index, rects) in byPage {
             pages[index].setHighlights(rects, current: currentMatch?.page == index ? currentMatch?.rect : nil)
         }
+    }
+
+    /// Visual-mode selection (per page) and cursor.
+    func setSelection(_ rects: [Int: [CGRect]], cursor: (page: Int, rect: CGRect)?) {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        defer { CATransaction.commit() }
+        for (index, page) in pages.enumerated() {
+            page.setOverlay("selection", rects[index], color: NSColor.selectedTextBackgroundColor.withAlphaComponent(0.55), z: 6)
+            let caret = cursor.flatMap { $0.page == index ? CGRect(x: $0.rect.minX - 1, y: $0.rect.minY, width: 2, height: $0.rect.height) : nil }
+            page.setOverlay("cursor", caret.map { [$0] }, color: NSColor.controlAccentColor, z: 7, rounded: false)
+        }
+    }
+
+    /// After a recompile: a brief accent bar in the left margin beside each changed band
+    /// (page display coordinates). An empty band (a deletion) gets a short tick.
+    func showChangeMarkers(_ bands: [Int: [ClosedRange<CGFloat>]]) {
+        guard let root = layer else { return }
+        let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        for (index, ranges) in bands where index < layout.pageFrames.count {
+            let frame = layout.pageFrames[index]
+            for range in ranges {
+                let height = max(range.upperBound - range.lowerBound, 5)
+                let marker = CALayer()
+                marker.frame = CGRect(x: frame.minX - 8, y: frame.minY + (range.lowerBound + range.upperBound) / 2 - height / 2,
+                                      width: 3, height: height)
+                marker.cornerRadius = 1.5
+                marker.name = "change"
+                marker.backgroundColor = NSColor.controlAccentColor.cgColor
+                marker.zPosition = 10
+                marker.opacity = 0
+                root.addSublayer(marker)
+
+                let fade = CAKeyframeAnimation(keyPath: "opacity")
+                fade.values = [0, 1, 1, 0]
+                fade.keyTimes = reduceMotion ? [0, 0, 1, 1] : [0, 0.1, 0.65, 1]
+                fade.duration = 1.4
+                CATransaction.begin()
+                CATransaction.setCompletionBlock { marker.removeFromSuperlayer() }
+                marker.add(fade, forKey: "fade")
+                CATransaction.commit()
+            }
+        }
+    }
+
+    var debugChangeMarkers: [String] {
+        (layer?.sublayers ?? []).filter { $0.name == "change" }.map { "y\(Int($0.frame.minY))+\(Int($0.frame.height))" }
     }
 
     /// Stops all rendering. Call before discarding the view.
@@ -277,32 +347,30 @@ private final class PageLayer: CALayer {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
-    private var highlights: CAShapeLayer?
-    private var currentHighlight: CAShapeLayer?
+    /// Shape layers drawn over the page: search highlights, the visual selection, its cursor.
+    private var overlays: [String: CAShapeLayer] = [:]
 
     func setHighlights(_ rects: [CGRect]?, current: CGRect?) {
-        highlights?.removeFromSuperlayer()
-        currentHighlight?.removeFromSuperlayer()
-        highlights = nil
-        currentHighlight = nil
-        guard let rects, !rects.isEmpty else { return }
-        highlights = addHighlight(rects, color: NSColor.systemYellow.withAlphaComponent(0.35))
-        if let current {
-            currentHighlight = addHighlight([current], color: NSColor.systemOrange.withAlphaComponent(0.55))
-        }
+        setOverlay("search", rects, color: NSColor.systemYellow.withAlphaComponent(0.35), z: 5)
+        setOverlay("current", current.map { [$0] }, color: NSColor.systemOrange.withAlphaComponent(0.55), z: 5.5)
     }
 
-    private func addHighlight(_ rects: [CGRect], color: NSColor) -> CAShapeLayer {
+    func setOverlay(_ key: String, _ rects: [CGRect]?, color: NSColor, z: CGFloat, rounded: Bool = true) {
+        overlays[key]?.removeFromSuperlayer()
+        overlays[key] = nil
+        guard let rects, !rects.isEmpty else { return }
         let path = CGMutablePath()
-        for rect in rects { path.addRoundedRect(in: rect.insetBy(dx: -1, dy: -1), cornerWidth: 2, cornerHeight: 2) }
+        for rect in rects {
+            if rounded { path.addRoundedRect(in: rect.insetBy(dx: -1, dy: -1), cornerWidth: 2, cornerHeight: 2) } else { path.addRect(rect) }
+        }
         let layer = CAShapeLayer()
         layer.frame = bounds
         layer.path = path
         layer.fillColor = color.cgColor
-        layer.zPosition = 5
+        layer.zPosition = z
         layer.actions = Self.noActions
         addSublayer(layer)
-        return layer
+        overlays[key] = layer
     }
 
     func setThumbnail(_ image: CGImage) {

@@ -1,10 +1,15 @@
 import AppKit
 import RillCore
 
-enum HintKind {
+enum HintKind: Equatable {
     case followLink
+    case previewLink
     case inverseSearch
     case yankLine
+    /// Pick where visual mode starts.
+    case visual(linewise: Bool)
+
+    var targetsLinks: Bool { self == .followLink || self == .previewLink }
 }
 
 enum HintTarget {
@@ -60,10 +65,9 @@ final class HintController {
         isActive = true
         let regions = host.visibleRegions()
         loading = Task { [weak self] in
-            let targets: [HintTarget] = switch kind {
-            case .followLink: await index.links(in: regions).map(HintTarget.link)
-            case .inverseSearch, .yankLine: await index.lines(in: regions).map(HintTarget.line)
-            }
+            let targets: [HintTarget] = kind.targetsLinks
+                ? await index.links(in: regions).map(HintTarget.link)
+                : await index.lines(in: regions).map(HintTarget.line)
             guard let self, self.isActive, !Task.isCancelled else { return }
             guard !targets.isEmpty else {
                 self.cancel()

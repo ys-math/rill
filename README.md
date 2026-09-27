@@ -52,6 +52,8 @@ Compile with SyncTeX enabled (vimtex's latexmk defaults already pass `-synctex=1
 | `f` | Follow a link (labels appear; type one) |
 | `F` | Inverse search on a line: jump Neovim to its source |
 | `yf` | Copy a line |
+| `p` | Preview a link's target (theorem, equation, citation) without leaving your place; `Enter` follows it |
+| `v` / `V` | Visual mode: pick a line, then select with `h l w b e j k 0 $` (counts work), `o` swaps ends, `y` copies, `Esc` cancels. `V` selects whole lines |
 | `⌃o` / `⌃i` | Jump back / forward |
 | `m{a-z}` / `'{a-z}` | Set / go to a mark (saved per document) |
 | `''` | Back to where the last jump started |
@@ -68,6 +70,10 @@ Compile with SyncTeX enabled (vimtex's latexmk defaults already pass `-synctex=1
 
 Counts work with motions: `5j`, `3J`, `12G`, `3n`.
 
+With the mouse: click a link to follow it, rest the pointer on one to preview it, `⌘`-click text
+for inverse search. After a recompile, a brief bar in the left margin marks what changed on screen
+(new or edited lines; text that only moved isn't marked).
+
 ## Config
 
 `~/.config/rill/config.toml` (or `$XDG_CONFIG_HOME/rill/config.toml`). Every setting is optional,
@@ -80,6 +86,7 @@ place.
 default_zoom = "fit-width"   # "fit-page", or a number like 1.25 (for documents opened the first time)
 dark_mode = "system"         # "on" | "off" | "system" (follow macOS)
 page_gap = 8                 # points between pages
+change_markers = true        # mark changed lines in the margin after a recompile
 
 [synctex]
 inverse_command = "nvim --headless -c \"VimtexInverseSearch %line '%file'\""   # also %column
@@ -104,8 +111,8 @@ Key notation follows Vim: `<C-d>` (control), `<M-x>` (option), `<S-Space>` (shif
 `fit_width`, `fit_page`, `jump_back`, `jump_forward`, `set_mark`, `goto_mark`, `search_forward`,
 `search_backward`, `search_next`, `search_previous`, `clear_highlights`, `hint_follow_link`,
 `hint_inverse_search`, `hint_yank_line`, `toggle_dark_mode`, `toggle_status`, `show_cheatsheet`,
-`close_document`, `open_file`, `show_outline`, `toggle_single_page`, `alternate_file`, `reload`,
-`toggle_frame_hud`.
+`close_document`, `open_file`, `show_outline`, `toggle_single_page`, `alternate_file`,
+`hint_preview_link`, `visual_mode`, `visual_line_mode`, `reload`, `toggle_frame_hud`.
 
 In the pickers, type to filter (fuzzy, smart-case), `↑`/`↓` or `⌃p`/`⌃n` to move, `Enter` to
 open, `Esc` to close. PDFs with the same name are shown with the folders that tell them apart

@@ -8,6 +8,8 @@ struct TextLine: Sendable {
     /// Display coordinates within the page (points, origin top-left).
     var rect: CGRect
     var text: String
+    /// Characters of the page's text this line covers (where visual mode starts).
+    var range: NSRange
 }
 
 /// A link annotation on screen, for `f`.
@@ -91,7 +93,8 @@ actor PDFTextIndex {
                 let text = (line.string ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
                 let rect = geometry.displayRect(line.bounds(for: page))
                 guard !text.isEmpty, rect.height > 1, rect.intersects(region) else { continue }
-                result.append(TextLine(page: index, rect: rect, text: text))
+                let range = line.numberOfTextRanges(on: page) > 0 ? line.range(at: 0, on: page) : NSRange(location: 0, length: 0)
+                result.append(TextLine(page: index, rect: rect, text: text, range: range))
             }
         }
         return result
@@ -111,6 +114,88 @@ actor PDFTextIndex {
             }
         }
         return result
+    }
+
+    // MARK: - Visual mode
+
+    private var pageTexts: [Int: PageText] = [:]
+    private var lineRects: [Int: [CGRect]] = [:]
+
+    var pageCount: Int { document.pageCount }
+
+    /// A page's lines and words, for motions.
+    func pageText(_ index: Int) -> PageText? {
+        if let cached = pageTexts[index] { return cached }
+        guard let page = document.page(at: index) else { return nil }
+        let string = text(of: index, page) as NSString
+        var lines: [NSRange] = [], rects: [CGRect] = []
+        let geometry = geometry(of: index, page)
+        for line in page.selection(for: page.bounds(for: .cropBox))?.selectionsByLine() ?? [] where line.numberOfTextRanges(on: page) > 0 {
+            let range = line.range(at: 0, on: page)
+            guard range.length > 0 else { continue }
+            lines.append(range)
+            rects.append(geometry.displayRect(line.bounds(for: page)))
+        }
+        var words: [NSRange] = []
+        string.enumerateSubstrings(in: NSRange(location: 0, length: string.length), options: [.byWords, .substringNotRequired]) { _, range, _, _ in
+            words.append(range)
+        }
+        let text = PageText(length: string.length, lines: lines, words: words)
+        pageTexts[index] = text
+        lineRects[index] = rects
+        return text
+    }
+
+    /// Display rect of each line from `pageText` (same order).
+    func lineRects(_ index: Int) -> [CGRect] {
+        _ = pageText(index)
+        return lineRects[index] ?? []
+    }
+
+    /// The character nearest `point` (display coordinates) on `page`, if any.
+    func characterIndex(page index: Int, at point: CGPoint) -> Int? {
+        guard let page = document.page(at: index) else { return nil }
+        let i = page.characterIndex(at: geometry(of: index, page).pagePoint(point))
+        return i >= 0 ? i : nil
+    }
+
+    /// Display rect of one character (the visual-mode cursor).
+    func characterRect(_ position: TextPosition) -> CGRect? {
+        guard let page = document.page(at: position.page) else { return nil }
+        let rect = page.characterBounds(at: position.index)
+        guard rect.width > 0 || rect.height > 0 else { return nil }
+        return geometry(of: position.page, page).displayRect(rect)
+    }
+
+    /// The text between two positions (inclusive) and its line rects per page.
+    func selection(from a: TextPosition, to b: TextPosition) -> (text: String, rects: [Int: [CGRect]]) {
+        let (start, end) = a <= b ? (a, b) : (b, a)
+        guard let startPage = document.page(at: start.page), let endPage = document.page(at: end.page),
+              let selection = document.selection(from: startPage, atCharacterIndex: start.index,
+                                                 to: endPage, atCharacterIndex: end.index)
+        else { return ("", [:]) }
+        var rects: [Int: [CGRect]] = [:]
+        for line in selection.selectionsByLine() {
+            for page in line.pages {
+                let index = document.index(for: page)
+                let rect = geometry(of: index, page).displayRect(line.bounds(for: page))
+                if rect.width > 0, rect.height > 0 { rects[index, default: []].append(rect) }
+            }
+        }
+        return (selection.string ?? "", rects)
+    }
+
+    // MARK: - Links by page (hover)
+
+    private var pageLinks: [Int: [LinkTarget]] = [:]
+
+    /// Every link on a page, cached; for hover previews.
+    func links(onPage index: Int) -> [LinkTarget] {
+        if let cached = pageLinks[index] { return cached }
+        guard let page = document.page(at: index) else { return [] }
+        let links = self.links(in: [index: CGRect(origin: .zero, size: geometry(of: index, page).displaySize)])
+        pageLinks[index] = links
+        return links
     }
 
     // MARK: - Outline

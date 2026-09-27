@@ -107,6 +107,13 @@ struct KeyResolverTests {
         #expect(Action.scrollDown.isContinuous)
     }
 
+    @Test func v11Bindings() {
+        var r = KeyResolver()
+        #expect(r.feed("p") == .action(.hintPreviewLink, count: nil))
+        #expect(r.feed("v") == .action(.visualMode, count: nil))
+        #expect(r.feed("V") == .action(.visualLineMode, count: nil))
+    }
+
     @Test func alternateFileLikeVim() {
         var r = KeyResolver()
         #expect(r.feed("<C-^>") == .action(.alternateFile, count: nil))
