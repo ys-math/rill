@@ -36,6 +36,8 @@ final class SearchController: NSObject, NSTextFieldDelegate {
     private var query = SearchQuery("")
     private var matches: [SearchMatch] = []
     private var current: Int?
+    /// Whether matches are on screen; Esc hides them, and a reload must not bring them back.
+    private var showsHighlights = false
     /// Where the search began: matches are found from here, and Esc returns here.
     private var origin: (position: PagePosition, anchor: (page: Int, y: CGFloat))?
     private var searchTask: Task<Void, Never>?
@@ -54,6 +56,7 @@ final class SearchController: NSObject, NSTextFieldDelegate {
         self.forward = forward
         origin = (host.currentPosition(), host.searchAnchor())
         isEditing = true
+        showsHighlights = true
         bar.prefix.stringValue = forward ? "/" : "?"
         bar.field.stringValue = ""
         bar.counter.stringValue = ""
@@ -82,10 +85,12 @@ final class SearchController: NSObject, NSTextFieldDelegate {
     /// Esc in normal mode: stop highlighting (the query is kept for `n`).
     func clearHighlights() {
         current = nil
+        showsHighlights = false
         host?.highlight([], current: nil)
     }
 
-    /// A new version of the document was loaded: search it again.
+    /// A new version of the document was loaded: search it again (for `n`), highlighting
+    /// the matches only if they were on screen before.
     func documentChanged() {
         warmUp?.cancel()
         warmUp = nil
@@ -170,13 +175,14 @@ final class SearchController: NSObject, NSTextFieldDelegate {
             } else {
                 self.current = nil
                 self.updateCounter()
-                self.host?.highlight(found, current: nil)
+                if self.showsHighlights { self.host?.highlight(found, current: nil) }
             }
         }
     }
 
     private func select(_ index: Int) {
         current = index
+        showsHighlights = true
         updateCounter()
         host?.highlight(matches, current: index)
         host?.show(matches[index])
