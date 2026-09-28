@@ -106,7 +106,7 @@ struct TrimTests {
         #expect(pixels.withUnsafeBytes { ContentBounds.find(in: $0, width: 1, height: 1, bytesPerRow: 4, bytesPerPixel: 4) } == nil)
     }
 
-    @Test func oddAndEvenPagesAreTrimmedSeparately() {
+    @Test func oddAndEvenPagesKeepTheirOwnGuttersButShareAHeight() {
         let size = CGSize(width: 600, height: 800)
         let profile = TrimProfile(contentBoxes: [
             CGRect(x: 150, y: 100, width: 350, height: 600),
@@ -116,7 +116,8 @@ struct TrimTests {
         ], pageSizes: Array(repeating: size, count: 4), padding: 10)
         let trims = profile.trims(for: Array(repeating: size, count: 5))
         #expect(trims[0] == CGRect(x: 140, y: 80, width: 370, height: 630))
-        #expect(trims[1] == CGRect(x: 90, y: 90, width: 370, height: 620))
+        // Each parity keeps its own gutter, but facing pages share a height so a spread lines up.
+        #expect(trims[1] == CGRect(x: 90, y: 80, width: 370, height: 630))
         #expect(trims[2] == trims[0])
         #expect(trims[3] == trims[1]) // a blank page takes its group's trim
         #expect(trims[4] == trims[0]) // so does a page added since
