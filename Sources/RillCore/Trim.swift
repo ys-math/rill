@@ -4,7 +4,8 @@ import CoreGraphics
 ///
 /// Every page of the same size and parity gets the same trim (the union of their content),
 /// so the text block doesn't shift or resize from page to page, and a two-sided document's
-/// odd and even pages each lose their own gutter.
+/// odd and even pages each lose their own gutter. Odd and even pages share their top and bottom,
+/// though, so facing pages in a spread are the same height.
 public struct TrimProfile: Equatable, Sendable {
     struct Group: Hashable {
         var width: Int
@@ -30,6 +31,15 @@ public struct TrimProfile: Equatable, Sendable {
             let group = Group(page: index, size: pageSizes[index])
             trims[group] = trims[group].map { $0.union(box) } ?? box
         }
+        var shared = trims
+        for (group, content) in trims {
+            var facing = group
+            facing.odd.toggle()
+            guard let other = trims[facing] else { continue }
+            shared[group] = CGRect(x: content.minX, y: min(content.minY, other.minY),
+                                   width: content.width, height: max(content.maxY, other.maxY) - min(content.minY, other.minY))
+        }
+        trims = shared
         for (group, content) in trims {
             let page = CGRect(x: 0, y: 0, width: group.width, height: group.height)
             trims[group] = content.insetBy(dx: -padding, dy: -padding).intersection(page).integral
