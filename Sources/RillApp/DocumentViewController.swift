@@ -1059,8 +1059,10 @@ extension DocumentViewController: SearchHost, HintHost {
         case (.inverseSearch, .line(let line)):
             documentView.flash(line.rect.offsetBy(dx: origin.x, dy: origin.y))
             let syncIndex = syncIndex
+            // A PDF line can mix words from several source lines; ask about its first word, not its middle.
+            let x = line.rect.minX + min(2, line.rect.width / 2)
             Task {
-                guard let location = await syncIndex.location(page: line.page, x: line.rect.midX, y: line.rect.midY) else {
+                guard let location = await syncIndex.location(page: line.page, x: x, y: line.rect.midY) else {
                     return NSSound.beep()
                 }
                 InverseSearch.open(location)
