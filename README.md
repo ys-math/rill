@@ -151,6 +151,8 @@ Compile with SyncTeX enabled (vimtex's latexmk defaults already pass `-synctex=1
 |---|---|
 | `o` / `⌘O` | Open a PDF: recent files, then PDFs under `[picker] roots` |
 | `⌘⇧O` | Open with the standard macOS panel |
+| `Tab` / `⇧Tab`, `⌃⌘→` / `⌃⌘←` | Next / previous tab |
+| `⌃⌘⇧←` / `⌃⌘⇧→` | Move the current tab left / right |
 | `⌃^` / `⌃6` | Previous PDF: its window if open, otherwise it replaces this one (press again to toggle back) |
 | `g?` | Cheatsheet of every binding (including your remaps) |
 | `g,` / `⌘,` | Edit the config (changes apply when you save) |
@@ -216,7 +218,7 @@ Key notation follows Vim: `<C-d>` (control), `<M-x>` (option), `<S-Space>` (shif
 `fit_width`, `fit_page`, `jump_back`, `jump_forward`, `set_mark`, `goto_mark`, `search_forward`,
 `search_backward`, `search_next`, `search_previous`, `clear_highlights`, `hint_follow_link`,
 `hint_inverse_search`, `hint_yank_line`, `toggle_dark_mode`, `toggle_status`, `show_cheatsheet`,
-`close_document`, `open_file`, `show_outline`, `toggle_single_page`, `alternate_file`,
+`close_document`, `open_file`, `show_outline`, `toggle_single_page`, `alternate_file`, `next_tab`, `previous_tab`,
 `hint_preview_link`, `visual_mode`, `visual_line_mode`, `toggle_spread`, `toggle_trim`, `reload`,
 `toggle_frame_hud`, `edit_config`.
 

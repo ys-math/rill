@@ -28,7 +28,8 @@ enum DebugSnapshot {
                 let picker = (window.windowController as? DocumentWindowController)
                     .map { $0.isPickerShowing ? "[\($0.debugPickerQuery)] \($0.debugPicker)" : "-" } ?? "-"
                 let windows = NSApp.windows.filter { $0.isVisible && $0.windowController is DocumentWindowController }.map(\.title)
-                log += "after \(step): \(document.debugStatus) picker=\(picker) windows=\(windows)\n"
+                let tab = NSApp.keyWindow?.tabGroup?.selectedWindow?.title ?? "-"
+                log += "after \(step): tab=\(tab) \(document.debugStatus) picker=\(picker) windows=\(windows)\n"
             }
             let delay = Double(env["RILL_SNAPSHOT_DELAY"] ?? "") ?? 1.0
             try? await Task.sleep(for: .seconds(delay))
@@ -36,8 +37,10 @@ enum DebugSnapshot {
             log += "final: pages=\(document.source.pageCount) page=\(state.position.page) offset=\(state.position.offset)\n"
             log += "final status: \(document.debugStatus)\n"
             log += "traffic lights alpha: \((window as? DocumentWindow)?.debugTrafficLightAlpha ?? -1)\n"
+            log += "titlebar tabs: \((window as? DocumentWindow)?.debugTabs ?? [])\n"
             try? log.write(toFile: path + ".txt", atomically: true, encoding: .utf8)
             write(window: window, to: URL(fileURLWithPath: path))
+            writeTitlebar(of: window, to: URL(fileURLWithPath: path + ".titlebar.png"))
             NSApp.terminate(nil)
         }
     }
@@ -57,6 +60,7 @@ enum DebugSnapshot {
         "<C-o>": (31, "\u{0F}", "o", [.control]),
         "<C-^>": (22, "\u{1E}", "^", [.control, .shift]),
         "<Tab>": (48, "\t", "\t", []),
+        "<S-Tab>": (48, "\u{19}", "\u{19}", [.shift]),
         "<C-i>": (34, "\t", "i", [.control]),
     ]
 
@@ -85,6 +89,14 @@ enum DebugSnapshot {
                 NSApp.postEvent(event, atStart: false)
             }
         }
+    }
+
+    /// The title bar (traffic lights and tabs) drawn as views, since it's outside the content's layer tree.
+    private static func writeTitlebar(of window: NSWindow, to url: URL) {
+        guard let titlebar = window.standardWindowButton(.zoomButton)?.superview,
+              let rep = titlebar.bitmapImageRepForCachingDisplay(in: titlebar.bounds) else { return }
+        titlebar.cacheDisplay(in: titlebar.bounds, to: rep)
+        try? rep.representation(using: .png, properties: [:])?.write(to: url)
     }
 
     private static func write(window: NSWindow, to url: URL) {

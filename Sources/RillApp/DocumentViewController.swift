@@ -739,6 +739,11 @@ final class DocumentViewController: NSViewController {
         case .showOutline: showOutline()
         case .toggleSinglePage: toggleSinglePage()
         case .alternateFile: onAlternateRequested?()
+        case .nextTab, .previousTab:
+            guard let window = view.window, (window.tabGroup?.windows.count ?? 1) > 1 else {
+                return toast.show("no other tab")
+            }
+            action == .nextTab ? window.selectNextTab(nil) : window.selectPreviousTab(nil)
         case .hintPreviewLink: hints.begin(.previewLink)
         case .visualMode: hints.begin(.visual(linewise: false))
         case .visualLineMode: hints.begin(.visual(linewise: true))
