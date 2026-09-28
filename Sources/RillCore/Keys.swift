@@ -45,6 +45,9 @@ public enum Action: String, CaseIterable, Sendable {
     case toggleSinglePage = "toggle_single_page"
     /// `⌃^`: the previously used PDF (Vim's alternate file).
     case alternateFile = "alternate_file"
+    /// `Tab` / `⇧Tab`: the window's next or previous tab.
+    case nextTab = "next_tab"
+    case previousTab = "previous_tab"
     case hintPreviewLink = "hint_preview_link"
     /// `v`: pick a line with a hint, then select characterwise.
     case visualMode = "visual_mode"
@@ -94,7 +97,8 @@ extension Action {
             .search
         case .hintFollowLink, .hintInverseSearch, .hintYankLine, .hintPreviewLink, .visualMode, .visualLineMode:
             .hints
-        case .reload, .toggleFrameHUD, .showCheatsheet, .closeDocument, .openFile, .alternateFile, .editConfig:
+        case .reload, .toggleFrameHUD, .showCheatsheet, .closeDocument, .openFile, .alternateFile, .nextTab,
+             .previousTab, .editConfig:
             .other
         }
     }
@@ -141,6 +145,8 @@ extension Action {
         case .showOutline: "go to a section (outline)"
         case .toggleSinglePage: "one page at a time / continuous"
         case .alternateFile: "previous PDF"
+        case .nextTab: "next tab"
+        case .previousTab: "previous tab"
         case .hintPreviewLink: "preview a link's target"
         case .visualMode: "select text (from a line)"
         case .visualLineMode: "select whole lines"
@@ -173,7 +179,7 @@ public enum KeyMap {
         "f": .hintFollowLink, "F": .hintInverseSearch, "yf": .hintYankLine,
         "i": .toggleDarkMode, "g.": .toggleStatus, "g?": .showCheatsheet, "g,": .editConfig, "q": .closeDocument,
         "o": .openFile, "t": .showOutline, "s": .toggleSinglePage, "S": .toggleSpread, "c": .toggleTrim,
-        "<C-^>": .alternateFile, "<C-6>": .alternateFile,
+        "<C-^>": .alternateFile, "<C-6>": .alternateFile, "<Tab>": .nextTab, "<S-Tab>": .previousTab,
         "p": .hintPreviewLink, "v": .visualMode, "V": .visualLineMode,
     ]
 

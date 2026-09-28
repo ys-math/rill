@@ -120,6 +120,13 @@ struct KeyResolverTests {
         #expect(r.feed("<C-6>") == .action(.alternateFile, count: nil))
     }
 
+    @Test func tabSwitchesTabs() {
+        var r = KeyResolver()
+        #expect(r.feed("<Tab>") == .action(.nextTab, count: nil))
+        #expect(r.feed("<S-Tab>") == .action(.previousTab, count: nil))
+        #expect(KeyMap.display("<S-Tab>") == "⇧Tab")
+    }
+
     @Test func customKeymap() {
         var r = KeyResolver(keymap: ["<C-f>": .screenDown, "zz": .fitPage])
         #expect(r.feed("j") == .unbound)

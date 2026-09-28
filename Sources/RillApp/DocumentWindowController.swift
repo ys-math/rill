@@ -37,6 +37,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate {
         window.titleVisibility = .hidden
         window.tabbingMode = .preferred
         window.hideTrafficLightsUntilHover()
+        window.showTabsInTitlebar()
         window.center()
         super.init(window: window)
         window.delegate = self
@@ -271,6 +272,11 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate {
 /// before it can reach the window controller.
 final class DocumentWindow: NSWindow {
     var onEscape: (() -> Void)?
+    private var titlebarTabs: TitlebarTabs?
+
+    override var title: String {
+        didSet { NotificationCenter.default.post(name: .rillTabsChanged, object: self) }
+    }
 
     private var trafficLights: [NSButton] {
         [.closeButton, .miniaturizeButton, .zoomButton].compactMap { standardWindowButton($0) }
@@ -284,6 +290,21 @@ final class DocumentWindow: NSWindow {
         titlebar.addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
                                                 owner: self, userInfo: nil))
     }
+
+    /// The window's tabs sit in the title bar, just after the zoom button.
+    func showTabsInTitlebar() {
+        guard let zoom = standardWindowButton(.zoomButton), let titlebar = zoom.superview else { return }
+        let tabs = TitlebarTabs(window: self)
+        titlebar.addSubview(tabs)
+        NSLayoutConstraint.activate([
+            tabs.leadingAnchor.constraint(equalTo: zoom.trailingAnchor, constant: 14),
+            tabs.trailingAnchor.constraint(lessThanOrEqualTo: titlebar.trailingAnchor, constant: -14),
+            tabs.centerYAnchor.constraint(equalTo: zoom.centerYAnchor),
+        ])
+        titlebarTabs = tabs
+    }
+
+    var debugTabs: [String] { titlebarTabs?.debugTitles ?? [] }
 
     override func mouseEntered(with event: NSEvent) {
         setTrafficLights(visible: true)
@@ -304,5 +325,43 @@ final class DocumentWindow: NSWindow {
 
     override func cancelOperation(_ sender: Any?) {
         if let onEscape { onEscape() } else { super.cancelOperation(sender) }
+    }
+
+    /// NSWindow spends `Tab` on moving focus between views and doesn't pass it on. With
+    /// nothing focused, it goes to the window controller like any other key.
+    override func keyDown(with event: NSEvent) {
+        if event.keyCode == 48, firstResponder === self, let next = nextResponder {
+            next.keyDown(with: event)
+        } else {
+            super.keyDown(with: event)
+        }
+    }
+
+    /// ⌃⌘⇧←
+    @objc func moveTabLeft(_ sender: Any?) { moveTab(by: -1) }
+    /// ⌃⌘⇧→
+    @objc func moveTabRight(_ sender: Any?) { moveTab(by: 1) }
+
+    /// Where this tab would land after moving `offset` places, or nil at the end of the tab bar.
+    private func tabDestination(by offset: Int) -> Int? {
+        guard let windows = tabGroup?.windows, let index = windows.firstIndex(of: self) else { return nil }
+        let destination = index + offset
+        return windows.indices.contains(destination) ? destination : nil
+    }
+
+    private func moveTab(by offset: Int) {
+        guard let group = tabGroup, let destination = tabDestination(by: offset) else { return }
+        group.removeWindow(self)
+        group.insertWindow(self, at: destination)
+        group.selectedWindow = self
+        NotificationCenter.default.post(name: .rillTabsChanged, object: self)
+    }
+
+    override func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        switch menuItem.action {
+        case #selector(moveTabLeft(_:)): tabDestination(by: -1) != nil
+        case #selector(moveTabRight(_:)): tabDestination(by: 1) != nil
+        default: super.validateMenuItem(menuItem)
+        }
     }
 }

@@ -19,7 +19,7 @@ extension NSEvent {
         case 53: return "<Esc>"
         case 49: return flags.contains(.shift) ? "<S-Space>" : "<Space>"
         case 36: return "<CR>"
-        case 48: return "<Tab>"
+        case 48: return flags.contains(.shift) ? "<S-Tab>" : "<Tab>"
         case 51: return "<BS>"
         default: break
         }
