@@ -1,0 +1,19 @@
+\documentclass[twocolumn]{article}
+\usepackage{amsthm,amsmath,hyperref,lipsum}
+\newtheorem{theorem}{Theorem}
+\begin{document}
+See Theorem~\ref{thm} and \eqref{eq}.
+\lipsum[1]
+\begin{theorem}\label{thm}
+The following are equivalent for a space that is long enough:
+\begin{enumerate}
+\item $X$ is compact and this item wraps around the line to be long.
+\item every sequence converges.
+\item something else.
+\end{enumerate}
+In particular it holds.
+\end{theorem}
+\lipsum[2]
+\begin{equation}\label{eq} a^2 + b^2 = c^2 \end{equation}
+\lipsum[3]
+\end{document}

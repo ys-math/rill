@@ -13,6 +13,18 @@ final class LinkPreview: NSView {
     var target: LinkTarget?
     /// Shown by hovering (hidden again when the pointer leaves the link).
     var fromHover = false
+    /// The page regions shown, top to bottom (display coordinates), so links inside the card
+    /// can be found and previewed in turn. Empty for a web address.
+    private(set) var regions: [PagePart] = []
+    /// Card points per page point.
+    private var scale: CGFloat = 1
+
+    /// The pointer moved over the card (a point in `pagePoint(at:)`'s terms), or left it (nil).
+    var onHover: ((CGPoint?) -> Void)?
+    /// A click on the card.
+    var onClick: ((CGPoint) -> Void)?
+    /// The scroll wheel over the card (it belongs to the document underneath).
+    var onScroll: ((NSEvent) -> Void)?
 
     init() {
         super.init(frame: .zero)
@@ -53,19 +65,85 @@ final class LinkPreview: NSView {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
-    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+    // The card takes the pointer: its links can be hovered and clicked.
+    override func hitTest(_ point: NSPoint) -> NSView? { isShowing && frame.contains(point) ? self : nil }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if trackingAreas.isEmpty {
+            addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseMoved, .mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect],
+                                           owner: self, userInfo: nil))
+        }
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        guard isShowing else { return }
+        onHover?(localPoint(event))
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        onHover?(nil)
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        onClick?(localPoint(event))
+    }
+
+    override func scrollWheel(with event: NSEvent) {
+        onScroll?(event)
+    }
+
+    /// An event's location from the card's top-left.
+    private func localPoint(_ event: NSEvent) -> CGPoint {
+        let point = convert(event.locationInWindow, from: nil)
+        return CGPoint(x: point.x, y: bounds.height - point.y)
+    }
 
     var isShowing: Bool { !isHidden && superview != nil }
 
+    /// The page point under a point of the card (from its top-left).
+    func pagePoint(at local: CGPoint) -> (page: Int, point: CGPoint)? {
+        var top: CGFloat = 0
+        for region in regions {
+            let height = region.rect.height * scale
+            if local.y >= top, local.y < top + height {
+                return (region.page, CGPoint(x: region.rect.minX + local.x / scale, y: region.rect.minY + (local.y - top) / scale))
+            }
+            top += height
+        }
+        return nil
+    }
+
+    /// A rect on a page, in `view`'s coordinates, if the card shows it.
+    func rect(_ rect: CGRect, onPage page: Int, in view: NSView) -> CGRect? {
+        var top: CGFloat = 0
+        for region in regions {
+            defer { top += region.rect.height * scale }
+            guard region.page == page, region.rect.intersects(rect) else { continue }
+            let local = CGRect(x: (rect.minX - region.rect.minX) * scale, y: top + (rect.minY - region.rect.minY) * scale,
+                               width: rect.width * scale, height: rect.height * scale)
+            // The card isn't flipped: from its bottom-left.
+            let unflipped = CGRect(x: local.minX, y: bounds.height - local.maxY, width: local.width, height: local.height)
+            return convert(unflipped, to: view)
+        }
+        return nil
+    }
+
     /// Shows `image` (drawn at `size` points) or `text`, next to `anchor` (container coordinates).
-    func show(image: CGImage?, size: CGSize, text: String?, near anchor: CGRect, in container: NSView) {
+    /// `regions` are the page regions the image shows, top to bottom. The card goes under
+    /// `beneath` (the hint labels) when given.
+    func show(image: CGImage?, size: CGSize, text: String?, regions: [PagePart] = [], near anchor: CGRect,
+              in container: NSView, beneath: NSView? = nil) {
+        self.regions = regions
         imageView.image = image.map { NSImage(cgImage: $0, size: size) }
         imageView.isHidden = image == nil
         label.stringValue = text ?? ""
         label.isHidden = text == nil
         let bounds = container.bounds
-        let width = min(size.width, bounds.width - 32)
-        let height = image == nil ? 34 : min(size.height * width / max(size.width, 1), bounds.height * 0.45)
+        // Shrunk to fit if needed, keeping the crop's proportions (a long theorem can be tall).
+        let fit = image == nil ? 1 : min(1, (bounds.width - 32) / max(size.width, 1), bounds.height * 0.7 / max(size.height, 1))
+        let width = min(size.width * fit, bounds.width - 32)
+        let height = image == nil ? 34 : size.height * fit
 
         // Below the link if it fits, otherwise above; kept inside the window.
         let flipped = container.isFlipped
@@ -78,16 +156,41 @@ final class LinkPreview: NSView {
 
         if superview !== container {
             removeFromSuperview()
-            container.addSubview(self)
+            if let beneath, beneath.superview === container {
+                container.addSubview(self, positioned: .below, relativeTo: beneath)
+            } else {
+                container.addSubview(self)
+            }
         }
         translatesAutoresizingMaskIntoConstraints = true
         frame = CGRect(origin: origin, size: CGSize(width: width, height: height))
+        scale = width / max(regions.map(\.rect.width).max() ?? width, 1)
         Overlay.show(self)
+    }
+
+    /// Crops from consecutive pages (an environment split by a page break), one below the
+    /// other, left-aligned.
+    nonisolated static func stack(_ images: [CGImage]) -> CGImage? {
+        guard images.count > 1 else { return images.first }
+        let width = images.map(\.width).max() ?? 0, height = images.map(\.height).reduce(0, +)
+        guard let context = CGContext(
+            data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+            space: CGColorSpace(name: CGColorSpace.sRGB)!,
+            bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue)
+        else { return nil }
+        // CoreGraphics draws from the bottom: the first page's part goes at the top.
+        var y = height
+        for image in images {
+            y -= image.height
+            context.draw(image, in: CGRect(x: 0, y: y, width: image.width, height: image.height))
+        }
+        return context.makeImage()
     }
 
     func hide() {
         target = nil
         fromHover = false
+        regions = []
         Overlay.hide(self)
     }
 }

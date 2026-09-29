@@ -1,0 +1,807 @@
+{
+  "links" : [
+    {
+      "anchor" : [
+        126.672,
+        598.86900000000003
+      ],
+      "page" : 0,
+      "text" : "2.2"
+    },
+    {
+      "anchor" : [
+        126.672,
+        179.81100000000004
+      ],
+      "page" : 1,
+      "text" : "2.3"
+    },
+    {
+      "anchor" : [
+        126.672,
+        392.70600000000002
+      ],
+      "page" : 0,
+      "text" : "2.1"
+    },
+    {
+      "anchor" : [
+        126.672,
+        354.99799999999999
+      ],
+      "page" : 1,
+      "text" : "2.4"
+    },
+    {
+      "anchor" : [
+        279.63900000000001,
+        639.29499999999996
+      ],
+      "page" : 0,
+      "text" : "1"
+    },
+    {
+      "anchor" : [
+        126.672,
+        321.47899999999998
+      ],
+      "page" : 1,
+      "text" : "2"
+    },
+    {
+      "anchor" : [
+        126.672,
+        286.83199999999999
+      ],
+      "page" : 0,
+      "text" : "2"
+    },
+    {
+      "anchor" : [
+        126.672,
+        494.87399999999997
+      ],
+      "page" : 1,
+      "text" : "1"
+    }
+  ],
+  "pages" : [
+    {
+      "lines" : [
+        {
+          "rect" : [
+            285.60000000000002,
+            119.09999999999999,
+            40.899999999999999,
+            9.4000000000000004
+          ],
+          "text" : "1. Intro"
+        },
+        {
+          "rect" : [
+            138.59999999999999,
+            137,
+            346.69999999999999,
+            8.8000000000000007
+          ],
+          "text" : "See Theorem 2.2, Lemma 2.3, Definition 2.1, Remark 2.4, equation (1), (2),"
+        },
+        {
+          "rect" : [
+            126.7,
+            149,
+            358.69999999999999,
+            8.8000000000000007
+          ],
+          "text" : "Section 2 and [1]. Lorem ipsum dolor sit amet, consectetuer adipiscing elit. Ut"
+        },
+        {
+          "rect" : [
+            126.7,
+            160.90000000000001,
+            358.69999999999999,
+            8.8000000000000007
+          ],
+          "text" : "purus elit, vestibulum ut, placerat ac, adipiscing vitae, felis. Curabitur dictum"
+        },
+        {
+          "rect" : [
+            126.7,
+            172.90000000000001,
+            358.69999999999999,
+            8.8000000000000007
+          ],
+          "text" : "gravida mauris. Nam arcu libero, nonummy eget, consectetuer id, vulputate a,"
+        },
+        {
+          "rect" : [
+            126.7,
+            184.90000000000001,
+            358.69999999999999,
+            8.8000000000000007
+          ],
+          "text" : "magna. Donec vehicula augue eu neque. Pellentesque habitant morbi tristique"
+        },
+        {
+          "rect" : [
+            126.7,
+            196.80000000000001,
+            358.69999999999999,
+            8.8000000000000007
+          ],
+          "text" : "senectus et netus et malesuada fames ac turpis egestas. Mauris ut leo. Cras viverra"
+        },
+        {
+          "rect" : [
+            126.7,
+            208.80000000000001,
+            358.69999999999999,
+            8.8000000000000007
+          ],
+          "text" : "metus rhoncus sem. Nulla et lectus vestibulum urna fringilla ultrices. Phasellus eu"
+        },
+        {
+          "rect" : [
+            126.7,
+            220.69999999999999,
+            358.69999999999999,
+            8.8000000000000007
+          ],
+          "text" : "tellus sit amet tortor gravida placerat. Integer sapien est, iaculis in, pretium quis,"
+        },
+        {
+          "rect" : [
+            126.7,
+            232.69999999999999,
+            358.69999999999999,
+            8.8000000000000007
+          ],
+          "text" : "viverra ac, nunc. Praesent eget sem vel leo ultrices bibendum. Aenean faucibus."
+        },
+        {
+          "rect" : [
+            126.7,
+            244.59999999999999,
+            358.69999999999999,
+            8.8000000000000007
+          ],
+          "text" : "Morbi dolor nulla, malesuada eu, pulvinar at, mollis ac, nulla. Curabitur auctor"
+        },
+        {
+          "rect" : [
+            126.7,
+            256.60000000000002,
+            358.69999999999999,
+            8.8000000000000007
+          ],
+          "text" : "semper nulla. Donec varius orci eget risus. Duis nibh mi, congue eu, accumsan"
+        },
+        {
+          "rect" : [
+            126.7,
+            268.5,
+            325.30000000000001,
+            8.8000000000000007
+          ],
+          "text" : "eleifend, sagittis quis, diam. Duis eget orci sit amet orci dignissim rutrum."
+        },
+        {
+          "rect" : [
+            287.10000000000002,
+            289.89999999999998,
+            37.799999999999997,
+            9.4000000000000004
+          ],
+          "text" : "2. Main"
+        },
+        {
+          "rect" : [
+            138.59999999999999,
+            307.89999999999998,
+            346.69999999999999,
+            8.8000000000000007
+          ],
+          "text" : "Nam dui ligula, fringilla a, euismod sodales, sollicitudin vel, wisi. Morbi auctor"
+        },
+        {
+          "rect" : [
+            126.7,
+            319.80000000000001,
+            358.69999999999999,
+            8.8000000000000007
+          ],
+          "text" : "lorem non justo. Nam lacus libero, pretium at, lobortis vitae, ultricies et, tellus."
+        },
+        {
+          "rect" : [
+            126.7,
+            331.80000000000001,
+            358.69999999999999,
+            8.8000000000000007
+          ],
+          "text" : "Donec aliquet, tortor sed accumsan bibendum, erat ligula aliquet magna, vitae"
+        },
+        {
+          "rect" : [
+            126.7,
+            343.69999999999999,
+            358.69999999999999,
+            8.8000000000000007
+          ],
+          "text" : "ornare odio metus a mi. Morbi ac orci et nisl hendrerit mollis. Suspendisse ut"
+        },
+        {
+          "rect" : [
+            126.7,
+            355.69999999999999,
+            358.69999999999999,
+            8.8000000000000007
+          ],
+          "text" : "massa. Cras nec ante. Pellentesque a nulla. Cum sociis natoque penatibus et"
+        },
+        {
+          "rect" : [
+            126.7,
+            367.60000000000002,
+            358.69999999999999,
+            8.8000000000000007
+          ],
+          "text" : "magnis dis parturient montes, nascetur ridiculus mus. Aliquam tincidunt urna."
+        },
+        {
+          "rect" : [
+            126.7,
+            379.60000000000002,
+            314.80000000000001,
+            8.8000000000000007
+          ],
+          "text" : "Nulla ullamcorper vestibulum turpis. Pellentesque cursus luctus mauris."
+        },
+        {
+          "rect" : [
+            126.7,
+            397.69999999999999,
+            358.69999999999999,
+            8.8000000000000007
+          ],
+          "text" : "Definition 2.1. A space X is compact if every open cover has a finite subcover."
+        },
+        {
+          "rect" : [
+            126.7,
+            409.69999999999999,
+            72.299999999999997,
+            8.8000000000000007
+          ],
+          "text" : "Moreover we say"
+        },
+        {
+          "rect" : [
+            268.19999999999999,
+            419.60000000000002,
+            46.600000000000001,
+            17.899999999999999
+          ],
+          "text" : "f(x) = ∫︂1"
+        },
+        {
+          "rect" : [
+            316.89999999999998,
+            428.60000000000002,
+            26.899999999999999,
+            8.8000000000000007
+          ],
+          "text" : "g(t) dt"
+        },
+        {
+          "rect" : [
+            306.39999999999998,
+            439.80000000000001,
+            4,
+            6.2000000000000002
+          ],
+          "text" : "0"
+        },
+        {
+          "rect" : [
+            126.7,
+            448.10000000000002,
+            358.69999999999999,
+            8.8000000000000007
+          ],
+          "text" : "is nice when it holds for all x in the space and this line wraps around to be long"
+        },
+        {
+          "rect" : [
+            126.7,
+            460,
+            33.799999999999997,
+            8.8000000000000007
+          ],
+          "text" : "enough."
+        },
+        {
+          "rect" : [
+            138.59999999999999,
+            478.19999999999999,
+            346.69999999999999,
+            8.8000000000000007
+          ],
+          "text" : "Nulla malesuada porttitor diam. Donec felis erat, congue non, volutpat at,"
+        },
+        {
+          "rect" : [
+            126.7,
+            490.10000000000002,
+            358.69999999999999,
+            8.8000000000000007
+          ],
+          "text" : "tincidunt tristique, libero. Vivamus viverra fermentum felis. Donec nonummy"
+        },
+        {
+          "rect" : [
+            126.7,
+            502.10000000000002,
+            358.69999999999999,
+            8.8000000000000007
+          ],
+          "text" : "pellentesque ante. Phasellus adipiscing semper elit. Proin fermentum massa ac"
+        },
+        {
+          "rect" : [
+            126.7,
+            514,
+            358.69999999999999,
+            8.8000000000000007
+          ],
+          "text" : "quam. Sed diam turpis, molestie vitae, placerat a, molestie nec, leo. Maecenas"
+        },
+        {
+          "rect" : [
+            126.7,
+            526,
+            358.69999999999999,
+            8.8000000000000007
+          ],
+          "text" : "lacinia. Nam ipsum ligula, eleifend at, accumsan nec, suscipit a, ipsum. Morbi"
+        },
+        {
+          "rect" : [
+            126.7,
+            537.89999999999998,
+            358.69999999999999,
+            8.8000000000000007
+          ],
+          "text" : "blandit ligula feugiat magna. Nunc eleifend consequat lorem. Sed lacinia nulla"
+        },
+        {
+          "rect" : [
+            126.7,
+            549.89999999999998,
+            358.69999999999999,
+            8.8000000000000007
+          ],
+          "text" : "vitae enim. Pellentesque tincidunt purus vel magna. Integer non enim. Praesent"
+        },
+        {
+          "rect" : [
+            126.7,
+            561.89999999999998,
+            358.69999999999999,
+            8.8000000000000007
+          ],
+          "text" : "euismod nunc eu purus. Donec bibendum quam in tellus. Nullam cursus pulvinar"
+        },
+        {
+          "rect" : [
+            126.7,
+            573.79999999999995,
+            358.69999999999999,
+            8.8000000000000007
+          ],
+          "text" : "lectus. Donec et mi. Nam vulputate metus eu enim. Vestibulum pellentesque felis"
+        },
+        {
+          "rect" : [
+            126.7,
+            585.79999999999995,
+            42.200000000000003,
+            8.8000000000000007
+          ],
+          "text" : "eu massa."
+        },
+        {
+          "rect" : [
+            126.7,
+            603.89999999999998,
+            358.69999999999999,
+            8.8000000000000007
+          ],
+          "text" : "Theorem 2.2. Let X be compact. Then every sequence has a convergent subse-"
+        },
+        {
+          "rect" : [
+            126.7,
+            615.89999999999998,
+            358.69999999999999,
+            8.8000000000000007
+          ],
+          "text" : "quence and moreover this statement wraps over lines to make it long enough for a"
+        },
+        {
+          "rect" : [
+            126.7,
+            627.79999999999995,
+            18.300000000000001,
+            8.8000000000000007
+          ],
+          "text" : "test."
+        },
+        {
+          "rect" : [
+            126.7,
+            642.29999999999995,
+            183.09999999999999,
+            10.9
+          ],
+          "text" : "(1) a2 + b2"
+        },
+        {
+          "rect" : [
+            313.10000000000002,
+            642.29999999999995,
+            18.800000000000001,
+            10.9
+          ],
+          "text" : "= c2"
+        },
+        {
+          "rect" : [
+            126.7,
+            660.89999999999998,
+            339.80000000000001,
+            8.8000000000000007
+          ],
+          "text" : "holds for all right triangles in the plane and this text wraps around to be long."
+        },
+        {
+          "rect" : [
+            126.7,
+            679,
+            358.69999999999999,
+            8.8000000000000007
+          ],
+          "text" : "Proof. Quisque ullamcorper placerat ipsum. Cras nibh. Morbi vel justo vitae lacus"
+        },
+        {
+          "rect" : [
+            126.7,
+            691,
+            358.69999999999999,
+            8.8000000000000007
+          ],
+          "text" : "tincidunt ultrices. Lorem ipsum dolor sit amet, consectetuer adipiscing elit. In hac"
+        },
+        {
+          "rect" : [
+            304,
+            705,
+            4,
+            6.2000000000000002
+          ],
+          "text" : "1"
+        }
+      ]
+    },
+    {
+      "lines" : [
+        {
+          "rect" : [
+            126.7,
+            97.299999999999997,
+            4,
+            6.2000000000000002
+          ],
+          "text" : "2"
+        },
+        {
+          "rect" : [
+            126.7,
+            119.09999999999999,
+            358.69999999999999,
+            8.8000000000000007
+          ],
+          "text" : "habitasse platea dictumst. Integer tempus convallis augue. Etiam facilisis. Nunc"
+        },
+        {
+          "rect" : [
+            126.7,
+            131.09999999999999,
+            358.69999999999999,
+            8.8000000000000007
+          ],
+          "text" : "elementum fermentum wisi. Aenean placerat. Ut imperdiet, enim sed gravida"
+        },
+        {
+          "rect" : [
+            126.7,
+            143,
+            358.69999999999999,
+            8.8000000000000007
+          ],
+          "text" : "sollicitudin, felis odio placerat quam, ac pulvinar elit purus eget enim. Nunc vitae"
+        },
+        {
+          "rect" : [
+            126.7,
+            155,
+            358.69999999999999,
+            8.8000000000000007
+          ],
+          "text" : "tortor. Proin tempus nibh sit amet nisl. Vivamus quis tortor vitae risus porta"
+        },
+        {
+          "rect" : [
+            126.7,
+            166.90000000000001,
+            358.69999999999999,
+            11.5
+          ],
+          "text" : "vehicula. □"
+        },
+        {
+          "rect" : [
+            126.7,
+            184.90000000000001,
+            188.90000000000001,
+            8.8000000000000007
+          ],
+          "text" : "Lemma 2.3. Short lemma statement here."
+        },
+        {
+          "rect" : [
+            138.59999999999999,
+            202.80000000000001,
+            346.69999999999999,
+            8.8000000000000007
+          ],
+          "text" : "Following paragraph text that is not in the lemma. Fusce mauris. Vestibulum"
+        },
+        {
+          "rect" : [
+            126.7,
+            214.69999999999999,
+            358.69999999999999,
+            8.8000000000000007
+          ],
+          "text" : "luctus nibh at lectus. Sed bibendum, nulla a faucibus semper, leo velit ultricies"
+        },
+        {
+          "rect" : [
+            126.7,
+            226.69999999999999,
+            358.69999999999999,
+            8.8000000000000007
+          ],
+          "text" : "tellus, ac venenatis arcu wisi vel nisl. Vestibulum diam. Aliquam pellentesque,"
+        },
+        {
+          "rect" : [
+            126.7,
+            238.59999999999999,
+            358.69999999999999,
+            8.8000000000000007
+          ],
+          "text" : "augue quis sagittis posuere, turpis lacus congue quam, in hendrerit risus eros eget"
+        },
+        {
+          "rect" : [
+            126.7,
+            250.59999999999999,
+            358.69999999999999,
+            8.8000000000000007
+          ],
+          "text" : "felis. Maecenas eget erat in sapien mattis porttitor. Vestibulum porttitor. Nulla"
+        },
+        {
+          "rect" : [
+            126.7,
+            262.60000000000002,
+            358.69999999999999,
+            8.8000000000000007
+          ],
+          "text" : "facilisi. Sed a turpis eu lacus commodo facilisis. Morbi fringilla, wisi in dignissim"
+        },
+        {
+          "rect" : [
+            126.7,
+            274.5,
+            358.69999999999999,
+            8.8000000000000007
+          ],
+          "text" : "interdum, justo lectus sagittis dui, et vehicula libero dui cursus dui. Mauris tempor"
+        },
+        {
+          "rect" : [
+            126.7,
+            286.5,
+            358.69999999999999,
+            8.8000000000000007
+          ],
+          "text" : "ligula sed lacus. Duis cursus enim ut augue. Cras ac magna. Cras nulla. Nulla"
+        },
+        {
+          "rect" : [
+            126.7,
+            298.39999999999998,
+            358.69999999999999,
+            8.8000000000000007
+          ],
+          "text" : "egestas. Curabitur a leo. Quisque egestas wisi eget nunc. Nam feugiat lacus vel"
+        },
+        {
+          "rect" : [
+            126.7,
+            310.39999999999998,
+            122.5,
+            8.8000000000000007
+          ],
+          "text" : "est. Curabitur consectetuer."
+        },
+        {
+          "rect" : [
+            126.7,
+            326.5,
+            12.699999999999999,
+            8.8000000000000007
+          ],
+          "text" : "(2)"
+        },
+        {
+          "rect" : [
+            126.7,
+            342.10000000000002,
+            12.699999999999999,
+            8.8000000000000007
+          ],
+          "text" : "(3)"
+        },
+        {
+          "rect" : [
+            285.30000000000001,
+            326.5,
+            41,
+            8.8000000000000007
+          ],
+          "text" : "x = y + z"
+        },
+        {
+          "rect" : [
+            285.30000000000001,
+            342.10000000000002,
+            23.800000000000001,
+            8.8000000000000007
+          ],
+          "text" : "u = v"
+        },
+        {
+          "rect" : [
+            126.7,
+            360,
+            358.69999999999999,
+            8.8000000000000007
+          ],
+          "text" : "Remark 2.4. A remark that is written in upright text and continues for a while so"
+        },
+        {
+          "rect" : [
+            126.7,
+            372,
+            173.69999999999999,
+            8.8000000000000007
+          ],
+          "text" : "that it wraps onto a second line of text."
+        },
+        {
+          "rect" : [
+            138.59999999999999,
+            389.89999999999998,
+            346.69999999999999,
+            8.8000000000000007
+          ],
+          "text" : "Suspendisse vel felis. Ut lorem lorem, interdum eu, tincidunt sit amet, laoreet"
+        },
+        {
+          "rect" : [
+            126.7,
+            401.89999999999998,
+            358.69999999999999,
+            8.8000000000000007
+          ],
+          "text" : "vitae, arcu. Aenean faucibus pede eu ante. Praesent enim elit, rutrum at, molestie"
+        },
+        {
+          "rect" : [
+            126.7,
+            413.80000000000001,
+            358.69999999999999,
+            8.8000000000000007
+          ],
+          "text" : "non, nonummy vel, nisl. Ut lectus eros, malesuada sit amet, fermentum eu, sodales"
+        },
+        {
+          "rect" : [
+            126.7,
+            425.80000000000001,
+            358.69999999999999,
+            8.8000000000000007
+          ],
+          "text" : "cursus, magna. Donec eu purus. Quisque vehicula, urna sed ultricies auctor, pede"
+        },
+        {
+          "rect" : [
+            126.7,
+            437.69999999999999,
+            358.69999999999999,
+            8.8000000000000007
+          ],
+          "text" : "lorem egestas dui, et convallis elit erat sed nulla. Donec luctus. Curabitur et nunc."
+        },
+        {
+          "rect" : [
+            126.7,
+            449.69999999999999,
+            358.69999999999999,
+            8.8000000000000007
+          ],
+          "text" : "Aliquam dolor odio, commodo pretium, ultricies non, pharetra in, velit. Integer"
+        },
+        {
+          "rect" : [
+            126.7,
+            461.69999999999999,
+            266.80000000000001,
+            8.8000000000000007
+          ],
+          "text" : "arcu est, nonummy in, fermentum faucibus, egestas vel, odio."
+        },
+        {
+          "rect" : [
+            277,
+            483.80000000000001,
+            58.100000000000001,
+            7.5999999999999996
+          ],
+          "text" : "References"
+        },
+        {
+          "rect" : [
+            126.7,
+            499.30000000000001,
+            358.69999999999999,
+            7.0999999999999996
+          ],
+          "text" : "[1] A. Author, A very long title of a paper that wraps over the line, Journal of Things 12 (2020),"
+        },
+        {
+          "rect" : [
+            139.80000000000001,
+            509.30000000000001,
+            19.300000000000001,
+            7.0999999999999996
+          ],
+          "text" : "1–20."
+        },
+        {
+          "rect" : [
+            126.7,
+            519.20000000000005,
+            179,
+            7.0999999999999996
+          ],
+          "text" : "[2] B. Author, Another paper, Journal 3 (1999)."
+        }
+      ]
+    }
+  ]
+}

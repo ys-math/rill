@@ -32,9 +32,17 @@ final class DocumentViewController: NSViewController {
     /// `⌃^` was pressed.
     var onAlternateRequested: (() -> Void)?
     private let outlinePicker = PickerView()
-    private let linkPreview = LinkPreview()
+    /// Link previews: the first for a link in the document, each further one for a link inside
+    /// the card below it.
+    private var previews: [LinkPreview] = []
     private let visual = VisualController()
     private var hoverTask: Task<Void, Never>?
+    private var cardHoverTask: Task<Void, Never>?
+    private var hideTask: Task<Void, Never>?
+    /// The card whose links the current hints label, if they're in a card.
+    private var cardHintLevel: Int?
+    /// The link just clicked; hovering it shows no preview until the pointer leaves it.
+    private var clickedLink: LinkTarget?
     private var outline: [OutlineEntry] = []
 
     private let syncIndex: SyncIndex
@@ -128,7 +136,7 @@ final class DocumentViewController: NSViewController {
         scrollView.onUserScroll = { [weak self] in
             self?.motion.stop()
             self?.hints.cancel()
-            if self?.linkPreview.isShowing == true { self?.linkPreview.hide() }
+            self?.hidePreviews()
             self?.zoomMode = .custom
         }
         scrollView.interceptScroll = { [weak self] event in self?.overscroll(event) ?? false }
@@ -319,37 +327,149 @@ final class DocumentViewController: NSViewController {
 
     // MARK: - Links: click, hover, preview
 
+
     /// The link under a document point, if any.
     private func link(at point: CGPoint) async -> LinkTarget? {
         let page = layout.pageIndex(at: point)
-        guard layout.pageFrames[page].contains(point), let index = textIndex() else { return nil }
-        let local = layout.pagePoint(point, onPage: page)
-        return await index.links(onPage: page).first { $0.rect.insetBy(dx: -2, dy: -2).contains(local) }
+        guard layout.pageFrames[page].contains(point) else { return nil }
+        return await link(onPage: page, at: layout.pagePoint(point, onPage: page))
+    }
+
+    /// The link at a point of a page (display coordinates), if any.
+    private func link(onPage page: Int, at point: CGPoint) async -> LinkTarget? {
+        guard let index = textIndex() else { return nil }
+        return await index.links(onPage: page).first { $0.rect.insetBy(dx: -2, dy: -2).contains(point) }
+    }
+
+    private static func same(_ a: LinkTarget?, _ b: LinkTarget?) -> Bool {
+        guard let a, let b else { return false }
+        return a.page == b.page && a.rect == b.rect
     }
 
     private func click(at point: CGPoint) {
         Task { [weak self] in
             guard let self, let link = await self.link(at: point) else { return }
+            // Following a link needs no preview of it: drop a pending or shown one, and keep it
+            // away while the pointer stays on that link.
+            self.hoverTask?.cancel()
+            self.hidePreviews()
+            self.clickedLink = link
             self.follow(link)
         }
     }
 
-    /// Resting the pointer on a link shows its preview; moving off hides it.
+    /// Resting the pointer on a link shows its preview; moving off hides it (after a moment, so
+    /// the pointer can move onto the card).
     private func hover(at point: CGPoint?) {
         hoverTask?.cancel()
-        guard let point else {
-            if linkPreview.fromHover { linkPreview.hide() }
-            return
-        }
+        guard let point else { return scheduleHide(from: 0) }
+        // Over a card: the card handles the pointer.
+        let inView = view.convert(point, from: documentView)
+        if previews.contains(where: { $0.isShowing && $0.frame.contains(inView) }) { return }
         hoverTask = Task { [weak self] in
             guard let self else { return }
             let link = await self.link(at: point)
-            if self.linkPreview.fromHover, self.linkPreview.target?.rect != link?.rect { self.linkPreview.hide() }
-            guard let link, !(self.linkPreview.isShowing && self.linkPreview.target?.rect == link.rect) else { return }
+            guard !Task.isCancelled else { return }
+            if let clicked = self.clickedLink {
+                if Self.same(link, clicked) { return }
+                self.clickedLink = nil
+            }
+            if Self.same(link, self.previews.first?.target) {
+                self.hideTask?.cancel()
+                return
+            }
+            self.scheduleHide(from: 0)
+            guard let link else { return }
             try? await Task.sleep(for: .milliseconds(350))
             guard !Task.isCancelled else { return }
             self.showPreview(link, fromHover: true)
         }
+    }
+
+    /// The pointer over the card at `level` (a point from its top-left), or leaving it (nil):
+    /// resting on a link inside the card opens a card for it on top.
+    private func cardHover(level: Int, at local: CGPoint?) {
+        cardHoverTask?.cancel()
+        guard let local else { return scheduleHide(from: level) }
+        let card = previews[level]
+        // Under a card above this one: that card handles the pointer.
+        let inView = card.convert(CGPoint(x: local.x, y: card.bounds.height - local.y), to: view)
+        if previews.dropFirst(level + 1).contains(where: { $0.isShowing && $0.frame.contains(inView) }) { return }
+        hideTask?.cancel()
+        guard let (page, point) = card.pagePoint(at: local) else { return scheduleHide(from: level + 1) }
+        cardHoverTask = Task { [weak self] in
+            guard let self else { return }
+            let link = await self.link(onPage: page, at: point)
+            guard !Task.isCancelled else { return }
+            let next = self.previews.indices.contains(level + 1) ? self.previews[level + 1].target : nil
+            if Self.same(link, next) { return }
+            self.scheduleHide(from: level + 1)
+            guard let link else { return }
+            try? await Task.sleep(for: .milliseconds(350))
+            guard !Task.isCancelled else { return }
+            self.showPreview(link, fromHover: true, level: level + 1)
+        }
+    }
+
+    /// A click inside a card follows the link under it.
+    private func cardClick(level: Int, at local: CGPoint) {
+        guard let (page, point) = previews[level].pagePoint(at: local) else { return }
+        Task { [weak self] in
+            guard let self, let link = await self.link(onPage: page, at: point) else { return }
+            self.hidePreviews()
+            self.follow(link)
+        }
+    }
+
+    private var isPreviewing: Bool { previews.contains { $0.isShowing } }
+
+    /// The card at `level`, made on first use.
+    private func card(at level: Int) -> LinkPreview {
+        while previews.count <= level {
+            let card = LinkPreview(), cardLevel = previews.count
+            card.onHover = { [weak self] in self?.cardHover(level: cardLevel, at: $0) }
+            card.onClick = { [weak self] in self?.cardClick(level: cardLevel, at: $0) }
+            card.onScroll = { [weak self] event in
+                self?.hidePreviews()
+                self?.scrollView.scrollWheel(with: event)
+            }
+            previews.append(card)
+        }
+        return previews[level]
+    }
+
+    /// Hides the cards from `level` up (all of them by default).
+    private func hidePreviews(from level: Int = 0) {
+        hideTask?.cancel()
+        for card in previews.dropFirst(level) where card.isShowing || card.target != nil { card.hide() }
+    }
+
+    /// Hides the hover-opened cards from `level` up in a moment, unless the pointer reaches one
+    /// of them (or the link it came from) first.
+    private func scheduleHide(from level: Int) {
+        hideTask?.cancel()
+        guard previews.indices.contains(level), previews[level].target != nil, previews[level].fromHover else { return }
+        hideTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(300))
+            guard !Task.isCancelled else { return }
+            self?.hidePreviews(from: level)
+        }
+    }
+
+    /// `p` / `f` with a card up: hints on the links inside the top card.
+    private func beginCardHints(_ kind: HintKind) {
+        guard let level = previews.lastIndex(where: { $0.isShowing }) else { return }
+        let card = previews[level]
+        var regions: [Int: CGRect] = [:]
+        for region in card.regions { regions[region.page] = region.rect }
+        guard !regions.isEmpty else { return NSSound.beep() }
+        cardHintLevel = level
+        let overlay = hints.overlay
+        hints.begin(kind, in: HintScope(regions: regions) { [weak card] page, point in
+            guard let card, let rect = card.rect(CGRect(origin: point, size: CGSize(width: 1, height: 1)), onPage: page, in: overlay)
+            else { return CGPoint(x: -100, y: -100) }
+            return CGPoint(x: rect.minX, y: overlay.isFlipped ? rect.minY : rect.maxY)
+        })
     }
 
     private func follow(_ link: LinkTarget) {
@@ -372,32 +492,76 @@ final class DocumentViewController: NSViewController {
 
     /// A card next to the link showing where it goes: a crop of the target page, sharp at the
     /// current zoom, or a web link's address.
-    private func showPreview(_ link: LinkTarget, fromHover: Bool) {
-        let origin = layout.origin(ofPage: link.page)
-        let anchor = view.convert(link.rect.offsetBy(dx: origin.x, dy: origin.y), from: documentView)
-        linkPreview.target = link
-        linkPreview.fromHover = fromHover
+    /// `level` 0 is a link in the document; higher levels are links inside the card below.
+    private func showPreview(_ link: LinkTarget, fromHover: Bool, level: Int = 0) {
+        // Where the link is on screen.
+        let anchor: CGRect
+        if level == 0 {
+            let origin = layout.origin(ofPage: link.page)
+            anchor = view.convert(link.rect.offsetBy(dx: origin.x, dy: origin.y), from: documentView)
+        } else {
+            guard previews.indices.contains(level - 1), previews[level - 1].isShowing,
+                  let rect = previews[level - 1].rect(link.rect, onPage: link.page, in: view)
+            else { return }
+            anchor = rect
+        }
+        hidePreviews(from: level + 1)
+        let card = card(at: level)
+        card.target = link
+        card.fromHover = fromHover
         switch link.destination {
         case .url(let url):
-            linkPreview.show(image: nil, size: CGSize(width: 520, height: 34), text: url.absoluteString, near: anchor, in: view)
+            card.show(image: nil, size: CGSize(width: 520, height: 34), text: url.absoluteString, near: anchor, in: view, beneath: hints.overlay)
         case .page(let index, let point):
             guard index < layout.pageCount else { return }
             // The shown part of the page: trimmed like the page itself.
-            let trim = layout.trims[index]
-            let top = max((point?.y ?? 0) - 18, trim.minY)
-            let region = CGRect(x: trim.minX, y: top, width: trim.width, height: max(min(230, trim.maxY - top), 1))
+            let trims = layout.trims
+            let height: CGFloat = 230
             let magnification = scrollView.magnification
             let scale = min(magnification * backingScale, 4)
-            let source = source, recolor = documentView.recolor
+            let source = source, recolor = documentView.recolor, textIndex = textIndex()
             Task { [weak self] in
+                let trim = trims[index]
+                var parts: [PagePart]
+                if let (term, environment) = await textIndex?.indexTarget(for: link, maxHeight: 600) {
+                    // An index entry's link names only the page: show the definition its term is
+                    // in, or else where the term is, a little way down.
+                    if let environment {
+                        parts = environment
+                    } else {
+                        let top = max(min(term.midY - height * 0.3, trim.maxY - height), trim.minY)
+                        parts = [PagePart(page: index, rect: CGRect(x: trim.minX, y: top, width: trim.width, height: height))]
+                    }
+                } else if let point, var environment = await textIndex?.environment(page: index, anchor: point, maxHeight: 600) {
+                    // The whole theorem, equation or reference the link names, on every page it
+                    // runs across; from the destination if it's well above (a figure over its caption).
+                    let first = environment[0].rect
+                    if point.y < first.minY - 12 {
+                        environment[0].rect = CGRect(x: first.minX, y: point.y, width: first.width, height: first.maxY - point.y)
+                    }
+                    parts = environment
+                } else {
+                    let top = (point?.y ?? 0) - 18
+                    parts = [PagePart(page: index, rect: CGRect(x: trim.minX, y: top, width: trim.width, height: height))]
+                }
+                // Within the page as shown (environments come with their margin).
+                let regions = parts.map { PagePart(page: $0.page, rect: $0.rect.intersection(trims[$0.page])) }
+                    .filter { !$0.rect.isEmpty }
+                guard !regions.isEmpty else { return }
                 let image = await Task.detached(priority: .userInitiated) { () -> UncheckedImageBox? in
-                    let pixels = CGRect(x: region.minX * scale, y: region.minY * scale, width: region.width * scale, height: region.height * scale)
-                    guard let plain = source.render(page: index, pixelRect: pixels, scale: scale) else { return nil }
-                    return UncheckedImageBox(recolor.flatMap { $0.apply(plain) } ?? plain)
+                    let images = regions.compactMap { region -> CGImage? in
+                        let r = region.rect
+                        let pixels = CGRect(x: r.minX * scale, y: r.minY * scale, width: r.width * scale, height: r.height * scale)
+                        guard let plain = source.render(page: region.page, pixelRect: pixels, scale: scale) else { return nil }
+                        return recolor.flatMap { $0.apply(plain) } ?? plain
+                    }
+                    guard images.count == regions.count else { return nil }
+                    return LinkPreview.stack(images).map(UncheckedImageBox.init)
                 }.value
-                guard let self, self.linkPreview.target?.rect == link.rect, let image else { return }
-                self.linkPreview.show(image: image.image, size: CGSize(width: region.width * magnification, height: region.height * magnification),
-                                      text: nil, near: anchor, in: self.view)
+                guard let self, Self.same(card.target, link), let image else { return }
+                let size = CGSize(width: (regions.map(\.rect.width).max() ?? 0) * magnification,
+                                  height: regions.map(\.rect.height).reduce(0, +) * magnification)
+                card.show(image: image.image, size: size, text: nil, regions: regions, near: anchor, in: self.view, beneath: self.hints.overlay)
             }
         }
     }
@@ -470,7 +634,7 @@ final class DocumentViewController: NSViewController {
         textIndexCache = nil
         hints.cancel()
         visual.cancel()
-        if linkPreview.isShowing { linkPreview.hide() }
+        hidePreviews()
         search.documentChanged()
         if let outgoing, let oldIndex = outgoing.index, let pages = outgoing.pages {
             markChanges(from: oldIndex, around: pages, in: newView)
@@ -569,16 +733,40 @@ final class DocumentViewController: NSViewController {
             cheatsheet.hide()
             return true
         }
-        if linkPreview.isShowing {
-            let target = linkPreview.target
-            linkPreview.hide()
-            if token == "<CR>", let target { follow(target); return true }
-        }
         if hints.isActive { return hints.feed(token) }
+        if isPreviewing {
+            // Enter follows the top card's link; the hint keys label the links inside it;
+            // anything else closes the cards and does what it always does.
+            if token == "<CR>", let target = previews.last(where: { $0.isShowing })?.target {
+                hidePreviews()
+                follow(target)
+                return true
+            }
+            let result = resolver.feed(token)
+            switch result {
+            case .pending(let display):
+                pill.pending = display
+                return true
+            case .action(.hintPreviewLink, _):
+                pill.pending = nil
+                beginCardHints(.previewLink)
+                return true
+            case .action(.hintFollowLink, _):
+                pill.pending = nil
+                beginCardHints(.followLink)
+                return true
+            default:
+                hidePreviews()
+                return handle(result, token: token, of: event)
+            }
+        }
         if visual.isActive { return visual.feed(token) }
         // Auto-repeat of a held motion key is handled by continuous scrolling; others repeat normally.
         if event.isARepeat, continuousKey == event.keyCode { return true }
-        let result = resolver.feed(token)
+        return handle(resolver.feed(token), token: token, of: event)
+    }
+
+    private func handle(_ result: KeyResolver.Result, token: KeyToken, of event: NSEvent) -> Bool {
         if case .pending(let display) = result { pill.pending = display } else { pill.pending = nil }
         switch result {
         case .pending:
@@ -631,16 +819,17 @@ final class DocumentViewController: NSViewController {
             cheatsheet.hide()
             return
         }
-        if linkPreview.isShowing {
-            linkPreview.hide()
+        if hints.isActive {
+            hints.cancel()
+            return
+        }
+        // The top card only: the one it came from stays.
+        if let top = previews.lastIndex(where: { $0.isShowing }) {
+            hidePreviews(from: top)
             return
         }
         if visual.isActive {
             _ = visual.feed("<Esc>")
-            return
-        }
-        if hints.isActive {
-            hints.cancel()
             return
         }
         if case .escape = resolver.feed("<Esc>") { perform(.clearHighlights, count: nil) }
@@ -1051,9 +1240,14 @@ extension DocumentViewController: SearchHost, HintHost {
         let origin = layout.origin(ofPage: target.page)
         switch (kind, target) {
         case (.followLink, .link(let link)):
+            cardHintLevel = nil
+            hidePreviews()
             follow(link)
         case (.previewLink, .link(let link)):
-            showPreview(link, fromHover: false)
+            // From hints inside a card: a card on top of it.
+            let level = isPreviewing ? cardHintLevel.map { $0 + 1 } ?? 0 : 0
+            cardHintLevel = nil
+            showPreview(link, fromHover: false, level: level)
         case (.visual(let linewise), .line(let line)):
             visual.begin(at: TextPosition(page: line.page, index: line.range.location), linewise: linewise)
         case (.inverseSearch, .line(let line)):
