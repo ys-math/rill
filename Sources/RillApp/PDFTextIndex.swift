@@ -96,11 +96,16 @@ actor PDFTextIndex {
                   let all = page.selection(for: page.bounds(for: .cropBox))
             else { continue }
             let geometry = geometry(of: index, page)
+            let length = (text(of: index, page) as NSString).length
             for line in all.selectionsByLine() {
+                // PDFKit can return a line with a negative range (seen in commutative diagrams),
+                // and its `string` then traps inside PDFKit. Such lines have no bounds anyway.
+                let ranges = (0..<line.numberOfTextRanges(on: page)).map { line.range(at: $0, on: page) }
+                guard ranges.allSatisfy({ $0.location >= 0 && $0.length >= 0 && NSMaxRange($0) <= length }) else { continue }
                 let text = (line.string ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
                 let rect = geometry.displayRect(line.bounds(for: page))
                 guard !text.isEmpty, rect.height > 1, rect.intersects(region) else { continue }
-                let range = line.numberOfTextRanges(on: page) > 0 ? line.range(at: 0, on: page) : NSRange(location: 0, length: 0)
+                let range = ranges.first ?? NSRange(location: 0, length: 0)
                 result.append(TextLine(page: index, rect: rect, text: text, range: range))
             }
         }
