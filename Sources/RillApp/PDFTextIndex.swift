@@ -25,6 +25,13 @@ struct LinkTarget: Sendable {
     var destination: Destination
 }
 
+/// Part of something shown from one page (display coordinates): an environment split across
+/// pages has one per page.
+struct PagePart: Sendable {
+    var page: Int
+    var rect: CGRect
+}
+
 /// A bookmark from the PDF's outline, for `t`.
 struct OutlineEntry: Sendable {
     var title: String
@@ -196,6 +203,93 @@ actor PDFTextIndex {
         let links = self.links(in: [index: CGRect(origin: .zero, size: geometry(of: index, page).displaySize)])
         pageLinks[index] = links
         return links
+    }
+
+    /// Where an index entry's term appears on the page its link leads to, and the environment
+    /// defining it if any. Nil if `link` isn't a page number in an index or the term isn't
+    /// found there.
+    func indexTarget(for link: LinkTarget, maxHeight: CGFloat) -> (term: CGRect, environment: [PagePart]?)? {
+        guard case .page(let targetIndex, _) = link.destination,
+              let page = document.page(at: link.page), let target = document.page(at: targetIndex)
+        else { return nil }
+        let sourceGeometry = geometry(of: link.page, page)
+        let a = sourceGeometry.pagePoint(CGPoint(x: link.rect.minX, y: link.rect.minY))
+        let b = sourceGeometry.pagePoint(CGPoint(x: link.rect.maxX, y: link.rect.maxY))
+        let linkBounds = CGRect(x: min(a.x, b.x), y: min(a.y, b.y), width: abs(a.x - b.x), height: abs(a.y - b.y))
+        guard IndexEntry.isPageNumber(page.selection(for: linkBounds)?.string ?? "") else { return nil }
+
+        // The entry's line, and for a subentry the nearest less indented line above it.
+        let entries = lines(in: [link.page: CGRect(origin: .zero, size: sourceGeometry.displaySize)])
+        guard let line = entries.first(where: { $0.rect.insetBy(dx: 0, dy: -1).contains(CGPoint(x: link.rect.midX, y: link.rect.midY)) }),
+              let term = IndexEntry.term(ofLine: line.text)
+        else { return nil }
+        let parent = entries
+            .filter { $0.rect.maxY <= line.rect.midY && $0.rect.minX < line.rect.minX - 2 && $0.rect.minX > line.rect.minX - 40 }
+            .max { $0.rect.minY < $1.rect.minY }
+            .flatMap { IndexEntry.term(ofLine: $0.text) ?? $0.text }
+
+        let targetText = text(of: targetIndex, target) as NSString
+        let targetGeometry = geometry(of: targetIndex, target)
+        let pieces = pieces(ofPage: targetIndex)
+        for candidate in IndexEntry.searchTerms(term: term, parent: parent) {
+            // A term may be split across lines, and PDF text puts spaces between Japanese and
+            // Latin letters unpredictably ("右 Kan 拡張"), so spacing is ignored.
+            let characters = candidate.filter { !$0.isWhitespace }
+            let pattern = characters.map { NSRegularExpression.escapedPattern(for: String($0)) }.joined(separator: #"\s*"#)
+            guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else { continue }
+            let rects = regex.matches(in: targetText as String, range: NSRange(location: 0, length: targetText.length)).compactMap { match -> CGRect? in
+                guard let first = target.selection(for: match.range)?.selectionsByLine().first else { return nil }
+                let rect = targetGeometry.displayRect(first.bounds(for: target))
+                return rect.width > 0 && rect.height > 0 ? rect : nil
+            }
+            guard let first = rects.first else { continue }
+            // The term's definition, rather than a mention before it (in a section title, say).
+            for rect in rects {
+                let point = CGPoint(x: rect.midX, y: rect.midY)
+                if let block = EnvironmentExtent.enclosing(point, in: pieces, maxHeight: maxHeight) {
+                    return (rect, parts(from: block, onPage: targetIndex, maxHeight: maxHeight))
+                }
+                // Defined in the part of an environment begun on the previous page.
+                if targetIndex > 0, case let previous = self.pieces(ofPage: targetIndex - 1),
+                   EnvironmentExtent.isCarriedOver(point, in: pieces, after: previous),
+                   let start = EnvironmentExtent.unfinished(on: previous, maxHeight: maxHeight) {
+                    return (rect, parts(from: start, onPage: targetIndex - 1, maxHeight: maxHeight))
+                }
+            }
+            return (first, nil)
+        }
+        return nil
+    }
+
+    /// The environment (theorem, equation, bibliography entry…) starting at `anchor` on a page,
+    /// with its continuation on the next pages, for a link's preview.
+    func environment(page index: Int, anchor: CGPoint, maxHeight: CGFloat) -> [PagePart]? {
+        guard let block = EnvironmentExtent.extent(of: pieces(ofPage: index), anchor: anchor, maxHeight: maxHeight) else { return nil }
+        return parts(from: block, onPage: index, maxHeight: maxHeight)
+    }
+
+    /// `block` and, while it runs off its page, the rest of it at the top of the next pages,
+    /// each with a margin for showing.
+    private func parts(from block: EnvironmentExtent.Block, onPage index: Int, maxHeight: CGFloat) -> [PagePart] {
+        var parts = [PagePart(page: index, rect: block.rect)]
+        var continues = block.continues, page = index
+        var height = block.rect.height
+        while continues, page + 1 < document.pageCount, height < maxHeight {
+            page += 1
+            guard let next = EnvironmentExtent.continuation(on: pieces(ofPage: page), after: pieces(ofPage: page - 1),
+                                                            maxHeight: maxHeight - height)
+            else { break }
+            parts.append(PagePart(page: page, rect: next.rect))
+            height += next.rect.height
+            continues = next.continues
+        }
+        return parts.map { PagePart(page: $0.page, rect: EnvironmentExtent.padded($0.rect, among: pieces(ofPage: $0.page))) }
+    }
+
+    private func pieces(ofPage index: Int) -> [TextPiece] {
+        guard let page = document.page(at: index) else { return [] }
+        let size = geometry(of: index, page).displaySize
+        return lines(in: [index: CGRect(origin: .zero, size: size)]).map { TextPiece(rect: $0.rect, text: $0.text) }
     }
 
     // MARK: - Outline

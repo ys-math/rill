@@ -1,0 +1,34 @@
+\documentclass{amsart}
+\usepackage{amsthm,amsmath,hyperref,lipsum}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\theoremstyle{definition}\newtheorem{definition}[theorem]{Definition}
+\theoremstyle{remark}\newtheorem{remark}[theorem]{Remark}
+\begin{document}
+\section{Intro}
+See Theorem~\ref{thm}, Lemma~\ref{lem}, Definition~\ref{def}, Remark~\ref{rem}, equation~\eqref{eq}, \eqref{al}, Section~\ref{sec} and \cite{A}.
+\lipsum[1]
+\section{Main}\label{sec}
+\lipsum[2]
+\begin{definition}\label{def}
+A space $X$ is \emph{compact} if every open cover has a finite subcover. Moreover we say
+\[ f(x) = \int_0^1 g(t)\,dt \]
+is nice when it holds for all $x$ in the space and this line wraps around to be long enough.
+\end{definition}
+\lipsum[3]
+\begin{theorem}\label{thm}
+Let $X$ be compact. Then every sequence has a convergent subsequence and moreover this statement wraps over lines to make it long enough for a test.
+\begin{equation}\label{eq} a^2 + b^2 = c^2 \end{equation}
+holds for all right triangles in the plane and this text wraps around to be long.
+\end{theorem}
+\begin{proof} \lipsum[4] \end{proof}
+\begin{lemma}\label{lem} Short lemma statement here. \end{lemma}
+Following paragraph text that is not in the lemma. \lipsum[5]
+\begin{align}\label{al} x &= y + z \\ u &= v \end{align}
+\begin{remark}\label{rem} A remark that is written in upright text and continues for a while so that it wraps onto a second line of text.\end{remark}
+\lipsum[6]
+\begin{thebibliography}{9}
+\bibitem{A} A. Author, \emph{A very long title of a paper that wraps over the line}, Journal of Things 12 (2020), 1--20.
+\bibitem{B} B. Author, Another paper, Journal 3 (1999).
+\end{thebibliography}
+\end{document}

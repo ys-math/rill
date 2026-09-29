@@ -142,7 +142,7 @@ Compile with SyncTeX enabled (vimtex's latexmk defaults already pass `-synctex=1
 | `f` | Follow a link (labels appear; type one) |
 | `F` | Inverse search on a line: jump Neovim to its source |
 | `yf` | Copy a line |
-| `p` | Preview a link's target (theorem, equation, citation) without leaving your place; `Enter` follows it |
+| `p` | Preview a link's target (the whole theorem, equation or citation, across a page break too) without leaving your place; `Enter` follows it. With a preview open, `p` / `f` label the links inside it, to preview (stacked on top) or follow them; `Esc` closes the top preview |
 | `v` / `V` | Visual mode: pick a line, then select with `h l w b e j k 0 $` (counts work), `o` swaps ends, `y` copies, `Esc` cancels. `V` selects whole lines |
 
 ### Other
@@ -162,8 +162,8 @@ Compile with SyncTeX enabled (vimtex's latexmk defaults already pass `-synctex=1
 
 Counts work with motions: `5j`, `3J`, `12G`, `3n`.
 
-With the mouse: click a link to follow it, rest the pointer on one to preview it, `⌘`-click text
-for inverse search. After a recompile, a brief bar in the left margin marks what changed on screen
+With the mouse: click a link to follow it, rest the pointer on one to preview it (and on a link
+inside a preview to preview that too), `⌘`-click text for inverse search. After a recompile, a brief bar in the left margin marks what changed on screen
 (new or edited lines; text that only moved isn't marked).
 
 ## Config

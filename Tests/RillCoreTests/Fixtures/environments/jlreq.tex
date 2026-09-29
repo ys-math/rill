@@ -1,0 +1,36 @@
+\documentclass{jlreq}
+\usepackage{amsmath,amssymb,hyperref}
+\usepackage[thmtools-compat]{keytheorems}
+\declaretheoremstyle[headfont=\normalfont\bfseries, bodyfont=\normalfont, headpunct={}, postheadspace={ }, spaceabove=3pt, spacebelow=3pt, qed=$\square$]{boxed}
+\declaretheorem[name=定義, style=boxed, within=section]{definition}
+\declaretheorem[name=定理, style=boxed, sibling=definition]{theorem}
+\declaretheorem[name=注意, style=boxed, sibling=definition]{remark}
+\renewcommand{\proofname}{\bfseries 証明}
+\renewcommand{\qedsymbol}{$\blacksquare$}
+\begin{document}
+定理~\ref{thm}, 定義~\ref{def}, 注意~\ref{rem}, 定義~\ref{list} を参照.
+\section{圏}
+\begin{remark}\label{rem}
+$\mathbf{Set}$の射$f$が同型射であることと$f$が全単射であることは同値である.
+\end{remark}
+\begin{theorem}\label{thm} (米田の補題)
+$C$を局所小圏とし$F \colon C \to \mathbf{Set}$を共変関手とする. 任意の$A \in \mathrm{Ob}(C)$に対して$\mathrm{Nat}(h^A, F) \cong F(A)$となる.
+\end{theorem}
+\begin{proof}
+写像$\phi$を定める. これは証明の本文であり, 定理の範囲には含まれないはずである. 長い文章で行を折り返す.
+\end{proof}
+\begin{definition}\label{def}
+$C$を局所小圏, $F \colon C \to \mathbf{Set}$を共変関手, $A \in \mathrm{Ob}(C)$とする. 次が成り立つとき$u \in F(A)$は$F$の普遍元であるという.
+\[ \forall B \in \mathrm{Ob}(C), \forall x \in F(B), \exists! f \in \mathrm{Mor}(A, B), F(f)(u) = x \tag{$\ast$} \]
+$u$が普遍元であるとき組$(A,u)$は$F$の普遍対であるという.
+\end{definition}
+\begin{definition}\label{list}
+圏$C$は以下のデータから成る.
+\begin{itemize}
+\item 対象の集まり$\mathrm{Ob}(C)$.
+\item 各対象の組$A, B$に対して射の集合$\mathrm{Mor}(A,B)$.
+\end{itemize}
+これらが結合律と単位律を満たすとき$C$を圏という.
+\end{definition}
+本文の段落がここから始まる. これは定義の外である.
+\end{document}

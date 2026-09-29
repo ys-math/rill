@@ -1,0 +1,512 @@
+{
+  "links" : [
+    {
+      "anchor" : [
+        72,
+        346.471
+      ],
+      "page" : 0,
+      "text" : "1"
+    },
+    {
+      "anchor" : [
+        159.96100000000001,
+        614.63200000000006
+      ],
+      "page" : 0,
+      "text" : "1"
+    }
+  ],
+  "pages" : [
+    {
+      "lines" : [
+        {
+          "rect" : [
+            82,
+            127.90000000000001,
+            218.69999999999999,
+            8.8000000000000007
+          ],
+          "text" : "See Theorem 1 and (1). Lorem ipsum dolor sit"
+        },
+        {
+          "rect" : [
+            72,
+            139.80000000000001,
+            228.59999999999999,
+            8.8000000000000007
+          ],
+          "text" : "amet, consectetuer adipiscing elit. Ut purus elit, ve-"
+        },
+        {
+          "rect" : [
+            72,
+            151.80000000000001,
+            228.59999999999999,
+            8.8000000000000007
+          ],
+          "text" : "stibulum ut, placerat ac, adipiscing vitae, felis. Cu-"
+        },
+        {
+          "rect" : [
+            72,
+            163.69999999999999,
+            228.59999999999999,
+            8.8000000000000007
+          ],
+          "text" : "rabitur dictum gravida mauris. Nam arcu libero, no-"
+        },
+        {
+          "rect" : [
+            72,
+            175.69999999999999,
+            228.59999999999999,
+            8.8000000000000007
+          ],
+          "text" : "nummy eget, consectetuer id, vulputate a, magna."
+        },
+        {
+          "rect" : [
+            72,
+            187.59999999999999,
+            228.59999999999999,
+            8.8000000000000007
+          ],
+          "text" : "Donec vehicula augue eu neque. Pellentesque habi-"
+        },
+        {
+          "rect" : [
+            72,
+            199.59999999999999,
+            228.59999999999999,
+            8.8000000000000007
+          ],
+          "text" : "tant morbi tristique senectus et netus et malesuada"
+        },
+        {
+          "rect" : [
+            72,
+            211.5,
+            228.59999999999999,
+            8.8000000000000007
+          ],
+          "text" : "fames ac turpis egestas. Mauris ut leo. Cras viverra"
+        },
+        {
+          "rect" : [
+            72,
+            223.5,
+            228.59999999999999,
+            8.8000000000000007
+          ],
+          "text" : "metus rhoncus sem. Nulla et lectus vestibulum urna"
+        },
+        {
+          "rect" : [
+            72,
+            235.40000000000001,
+            228.59999999999999,
+            8.8000000000000007
+          ],
+          "text" : "fringilla ultrices. Phasellus eu tellus sit amet tortor"
+        },
+        {
+          "rect" : [
+            72,
+            247.40000000000001,
+            228.59999999999999,
+            8.8000000000000007
+          ],
+          "text" : "gravida placerat. Integer sapien est, iaculis in, pre-"
+        },
+        {
+          "rect" : [
+            72,
+            259.39999999999998,
+            228.59999999999999,
+            8.8000000000000007
+          ],
+          "text" : "tium quis, viverra ac, nunc. Praesent eget sem vel"
+        },
+        {
+          "rect" : [
+            72,
+            271.30000000000001,
+            228.59999999999999,
+            8.8000000000000007
+          ],
+          "text" : "leo ultrices bibendum. Aenean faucibus. Morbi do-"
+        },
+        {
+          "rect" : [
+            72,
+            283.30000000000001,
+            228.59999999999999,
+            8.8000000000000007
+          ],
+          "text" : "lor nulla, malesuada eu, pulvinar at, mollis ac, nulla."
+        },
+        {
+          "rect" : [
+            72,
+            295.19999999999999,
+            228.59999999999999,
+            8.8000000000000007
+          ],
+          "text" : "Curabitur auctor semper nulla. Donec varius orci"
+        },
+        {
+          "rect" : [
+            72,
+            307.19999999999999,
+            228.59999999999999,
+            8.8000000000000007
+          ],
+          "text" : "eget risus. Duis nibh mi, congue eu, accumsan elei-"
+        },
+        {
+          "rect" : [
+            72,
+            319.10000000000002,
+            228.59999999999999,
+            8.8000000000000007
+          ],
+          "text" : "fend, sagittis quis, diam. Duis eget orci sit amet orci"
+        },
+        {
+          "rect" : [
+            72,
+            331.10000000000002,
+            77.700000000000003,
+            8.8000000000000007
+          ],
+          "text" : "dignissim rutrum."
+        },
+        {
+          "rect" : [
+            72,
+            351.5,
+            228.59999999999999,
+            8.8000000000000007
+          ],
+          "text" : "Theorem 1. The following are equivalent for a space"
+        },
+        {
+          "rect" : [
+            72,
+            363.5,
+            85.799999999999997,
+            8.8000000000000007
+          ],
+          "text" : "that is long enough:"
+        },
+        {
+          "rect" : [
+            78.799999999999997,
+            383.89999999999998,
+            221.80000000000001,
+            8.8000000000000007
+          ],
+          "text" : "1. X is compact and this item wraps around the line"
+        },
+        {
+          "rect" : [
+            91.900000000000006,
+            395.80000000000001,
+            45.100000000000001,
+            8.8000000000000007
+          ],
+          "text" : "to be long."
+        },
+        {
+          "rect" : [
+            78.799999999999997,
+            416.39999999999998,
+            123.90000000000001,
+            8.8000000000000007
+          ],
+          "text" : "2. every sequence converges."
+        },
+        {
+          "rect" : [
+            78.799999999999997,
+            437,
+            79.099999999999994,
+            8.8000000000000007
+          ],
+          "text" : "3. something else."
+        },
+        {
+          "rect" : [
+            72,
+            457.39999999999998,
+            93.5,
+            8.8000000000000007
+          ],
+          "text" : "In particular it holds."
+        },
+        {
+          "rect" : [
+            82,
+            477.89999999999998,
+            218.69999999999999,
+            8.8000000000000007
+          ],
+          "text" : "Nam dui ligula, fringilla a, euismod sodales, sol-"
+        },
+        {
+          "rect" : [
+            72,
+            489.80000000000001,
+            228.59999999999999,
+            8.8000000000000007
+          ],
+          "text" : "licitudin vel, wisi. Morbi auctor lorem non justo."
+        },
+        {
+          "rect" : [
+            72,
+            501.80000000000001,
+            228.59999999999999,
+            8.8000000000000007
+          ],
+          "text" : "Nam lacus libero, pretium at, lobortis vitae, ultricies"
+        },
+        {
+          "rect" : [
+            72,
+            513.70000000000005,
+            228.59999999999999,
+            8.8000000000000007
+          ],
+          "text" : "et, tellus. Donec aliquet, tortor sed accumsan bi-"
+        },
+        {
+          "rect" : [
+            72,
+            525.70000000000005,
+            228.59999999999999,
+            8.8000000000000007
+          ],
+          "text" : "bendum, erat ligula aliquet magna, vitae ornare odio"
+        },
+        {
+          "rect" : [
+            72,
+            537.60000000000002,
+            228.59999999999999,
+            8.8000000000000007
+          ],
+          "text" : "metus a mi. Morbi ac orci et nisl hendrerit mollis."
+        },
+        {
+          "rect" : [
+            72,
+            549.60000000000002,
+            228.59999999999999,
+            8.8000000000000007
+          ],
+          "text" : "Suspendisse ut massa. Cras nec ante. Pellentesque"
+        },
+        {
+          "rect" : [
+            72,
+            561.60000000000002,
+            228.59999999999999,
+            8.8000000000000007
+          ],
+          "text" : "a nulla. Cum sociis natoque penatibus et magnis dis"
+        },
+        {
+          "rect" : [
+            72,
+            573.5,
+            228.59999999999999,
+            8.8000000000000007
+          ],
+          "text" : "parturient montes, nascetur ridiculus mus. Aliquam"
+        },
+        {
+          "rect" : [
+            72,
+            585.5,
+            228.59999999999999,
+            8.8000000000000007
+          ],
+          "text" : "tincidunt urna. Nulla ullamcorper vestibulum turpis."
+        },
+        {
+          "rect" : [
+            72,
+            597.39999999999998,
+            149.09999999999999,
+            8.8000000000000007
+          ],
+          "text" : "Pellentesque cursus luctus mauris."
+        },
+        {
+          "rect" : [
+            160,
+            617.60000000000002,
+            30.199999999999999,
+            10.9
+          ],
+          "text" : "a2 + b2"
+        },
+        {
+          "rect" : [
+            193.40000000000001,
+            617.60000000000002,
+            107.3,
+            10.9
+          ],
+          "text" : "= c2 (1)"
+        },
+        {
+          "rect" : [
+            72,
+            641.89999999999998,
+            228.59999999999999,
+            8.8000000000000007
+          ],
+          "text" : "Nulla malesuada porttitor diam. Donec felis erat,"
+        },
+        {
+          "rect" : [
+            72,
+            653.89999999999998,
+            228.59999999999999,
+            8.8000000000000007
+          ],
+          "text" : "congue non, volutpat at, tincidunt tristique, libero."
+        },
+        {
+          "rect" : [
+            72,
+            665.79999999999995,
+            228.59999999999999,
+            8.8000000000000007
+          ],
+          "text" : "Vivamus viverra fermentum felis. Donec nonummy"
+        },
+        {
+          "rect" : [
+            310.60000000000002,
+            127.90000000000001,
+            228.59999999999999,
+            8.8000000000000007
+          ],
+          "text" : "pellentesque ante. Phasellus adipiscing semper elit."
+        },
+        {
+          "rect" : [
+            310.60000000000002,
+            139.80000000000001,
+            228.59999999999999,
+            8.8000000000000007
+          ],
+          "text" : "Proin fermentum massa ac quam. Sed diam turpis,"
+        },
+        {
+          "rect" : [
+            310.60000000000002,
+            151.80000000000001,
+            228.59999999999999,
+            8.8000000000000007
+          ],
+          "text" : "molestie vitae, placerat a, molestie nec, leo. Maece-"
+        },
+        {
+          "rect" : [
+            310.60000000000002,
+            163.69999999999999,
+            228.59999999999999,
+            8.8000000000000007
+          ],
+          "text" : "nas lacinia. Nam ipsum ligula, eleifend at, accumsan"
+        },
+        {
+          "rect" : [
+            310.60000000000002,
+            175.69999999999999,
+            228.59999999999999,
+            8.8000000000000007
+          ],
+          "text" : "nec, suscipit a, ipsum. Morbi blandit ligula feugiat"
+        },
+        {
+          "rect" : [
+            310.60000000000002,
+            187.59999999999999,
+            228.59999999999999,
+            8.8000000000000007
+          ],
+          "text" : "magna. Nunc eleifend consequat lorem. Sed lacinia"
+        },
+        {
+          "rect" : [
+            310.60000000000002,
+            199.59999999999999,
+            228.59999999999999,
+            8.8000000000000007
+          ],
+          "text" : "nulla vitae enim. Pellentesque tincidunt purus vel"
+        },
+        {
+          "rect" : [
+            310.60000000000002,
+            211.5,
+            228.59999999999999,
+            8.8000000000000007
+          ],
+          "text" : "magna. Integer non enim. Praesent euismod nunc"
+        },
+        {
+          "rect" : [
+            310.60000000000002,
+            223.5,
+            228.59999999999999,
+            8.8000000000000007
+          ],
+          "text" : "eu purus. Donec bibendum quam in tellus. Nullam"
+        },
+        {
+          "rect" : [
+            310.60000000000002,
+            235.40000000000001,
+            228.59999999999999,
+            8.8000000000000007
+          ],
+          "text" : "cursus pulvinar lectus. Donec et mi. Nam vulpu-"
+        },
+        {
+          "rect" : [
+            310.60000000000002,
+            247.40000000000001,
+            228.59999999999999,
+            8.8000000000000007
+          ],
+          "text" : "tate metus eu enim. Vestibulum pellentesque felis eu"
+        },
+        {
+          "rect" : [
+            310.60000000000002,
+            259.39999999999998,
+            28.899999999999999,
+            8.8000000000000007
+          ],
+          "text" : "massa."
+        },
+        {
+          "rect" : [
+            303.10000000000002,
+            695.70000000000005,
+            5,
+            8.8000000000000007
+          ],
+          "text" : "1"
+        }
+      ]
+    }
+  ]
+}

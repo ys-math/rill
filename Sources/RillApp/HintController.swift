@@ -44,6 +44,14 @@ protocol HintHost: AnyObject {
     func hintChosen(_ target: HintTarget, kind: HintKind)
 }
 
+/// Where hints go when not on the document itself: inside a link preview card.
+struct HintScope {
+    /// The page regions to label, in each page's display coordinates.
+    var regions: [Int: CGRect]
+    /// A page point in the hint overlay's coordinates.
+    var place: (Int, CGPoint) -> CGPoint
+}
+
 /// `f` / `F` / `yf`: label on-screen targets with home-row keys, act on the one typed.
 @MainActor
 final class HintController {
@@ -57,13 +65,16 @@ final class HintController {
     private var hints: [(label: String, target: HintTarget)] = []
     private var typed = ""
     private var loading: Task<Void, Never>?
+    private var scope: HintScope?
 
-    func begin(_ kind: HintKind) {
+    /// Labels targets on screen, or only those within `scope` (a preview card).
+    func begin(_ kind: HintKind, in scope: HintScope? = nil) {
         guard let host, let index = host.textIndex() else { return NSSound.beep() }
         cancel()
         self.kind = kind
+        self.scope = scope
         isActive = true
-        let regions = host.visibleRegions()
+        let regions = scope?.regions ?? host.visibleRegions()
         loading = Task { [weak self] in
             let targets: [HintTarget] = kind.targetsLinks
                 ? await index.links(in: regions).map(HintTarget.link)
@@ -112,6 +123,7 @@ final class HintController {
     func cancel() {
         loading?.cancel()
         loading = nil
+        scope = nil
         isActive = false
         hints = []
         typed = ""
@@ -128,8 +140,8 @@ final class HintController {
             case .line: CGPoint(x: rect.minX, y: rect.midY)
             }
             let isLine = if case .line = hint.target { true } else { false }
-            return HintOverlay.Badge(label: hint.label, typed: typed.count,
-                                     point: host.overlayPoint(page: hint.target.page, point: anchor), leftOfPoint: isLine)
+            let point = scope.map { $0.place(hint.target.page, anchor) } ?? host.overlayPoint(page: hint.target.page, point: anchor)
+            return HintOverlay.Badge(label: hint.label, typed: typed.count, point: point, leftOfPoint: isLine)
         }
         overlay.show(visible)
     }
