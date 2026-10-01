@@ -8,12 +8,6 @@ import RillCore
 final class Motion {
     enum Axis { case horizontal, vertical }
 
-    /// Held-key scroll speed, in screen points per second.
-    static let continuousSpeed: Double = 1300
-    /// Time constant of the held-key speed ramp (~80 ms to full speed).
-    static let continuousRamp: Double = 0.03
-    /// A key released sooner than this was a tap: finish exactly one step instead of gliding.
-    static let tapThreshold: CFTimeInterval = 0.2
     /// Jumps farther than this many viewports crossfade instead of scrolling the whole way.
     static let longJumpViewports: CGFloat = 3
 
@@ -25,7 +19,11 @@ final class Motion {
     private var xSpring: Spring?
     private var ySpring: Spring?
     private var zoom: ZoomAnimation?
-    private var continuous: Continuous?
+    /// Held-key scrolling, per axis: running while the key is held and coasting after release.
+    private var xHeld: HeldScroll?
+    private var yHeld: HeldScroll?
+    /// The axis of the key currently held.
+    private var pressed: Axis?
 
     /// Single-page mode: the vertical span (document points) scrolling must stay within.
     var ySpan: ClosedRange<CGFloat>?
@@ -75,7 +73,7 @@ final class Motion {
     /// Scroll so the document point `y` is at the top of the viewport. Long jumps crossfade.
     func jump(toY y: CGFloat) {
         zoom = nil
-        continuous = nil
+        stopHeld()
         let target = clampY(y)
         let distance = target - origin.y
         if reduceMotion {
@@ -97,7 +95,7 @@ final class Motion {
     func zoom(to magnification: CGFloat, anchor: CGPoint, finalAnchor: CGPoint? = nil, viewPoint: CGPoint) {
         xSpring = nil
         ySpring = nil
-        continuous = nil
+        stopHeld()
         let target = min(max(magnification, scrollView.minMagnification), scrollView.maxMagnification)
         let animation = ZoomAnimation(from: scrollView.magnification, to: target,
                                       anchor: anchor, finalAnchor: finalAnchor ?? anchor, viewPoint: viewPoint)
@@ -110,33 +108,33 @@ final class Motion {
         start()
     }
 
-    /// Begin scrolling continuously while a key is held.
-    func beginContinuous(axis: Axis, direction: CGFloat, step: CGFloat) {
+    /// Begin scrolling continuously while a key is held: speeding up to `speed` (screen points
+    /// per second) over `accelTime`, and coasting to a stop over `decelTime` once released.
+    func beginContinuous(axis: Axis, direction: CGFloat, speed: Double, accelTime: Double, decelTime: Double) {
         zoom = nil
-        let spring = axis == .vertical ? ySpring : xSpring
-        let position = axis == .vertical ? origin.y : origin.x
-        continuous = Continuous(axis: axis, direction: direction, step: step, startPosition: position,
-                                startTime: CACurrentMediaTime(), velocity: spring?.velocity ?? 0)
+        // Another key still held (its keyUp won't come to us now) coasts to a stop.
+        if let old = pressed, old != axis { update(old) { $0?.release() } }
+        let magnification = Double(scrollView.magnification)
+        let springVelocity = (axis == .vertical ? ySpring : xSpring)?.velocity ?? 0
         if axis == .vertical { ySpring = nil } else { xSpring = nil }
+        update(axis) { held in
+            var h = held ?? HeldScroll(speed: speed, accelTime: accelTime, decelTime: decelTime,
+                                       velocity: springVelocity * magnification, direction: 0)
+            h.speed = speed
+            h.accelTime = accelTime
+            h.decelTime = decelTime
+            h.hold(direction: Double(direction))
+            held = h
+        }
+        pressed = axis
         start()
     }
 
-    /// The held key was released: a tap finishes exactly one step, a hold glides to a stop.
+    /// The held key was released: brake to a stop, however briefly it was held.
     func endContinuous() {
-        guard let c = continuous else { return }
-        continuous = nil
-        let position = c.axis == .vertical ? origin.y : origin.x
-        let target: CGFloat
-        if CACurrentMediaTime() - c.startTime < Self.tapThreshold {
-            target = c.startPosition + c.direction * c.step
-        } else {
-            target = position + CGFloat(c.velocity) * 0.06
-        }
-        var spring = Spring(position: position, velocity: c.velocity, target: target)
-        switch c.axis {
-        case .vertical: spring.target = clampY(target); ySpring = spring
-        case .horizontal: spring.target = clampX(target); xSpring = spring
-        }
+        guard let axis = pressed else { return }
+        pressed = nil
+        update(axis) { $0?.release() }
         start()
     }
 
@@ -152,21 +150,45 @@ final class Motion {
         xSpring = nil
         ySpring = nil
         zoom = nil
-        continuous = nil
+        stopHeld()
+    }
+
+    private func stopHeld() {
+        xHeld = nil
+        yHeld = nil
+        pressed = nil
+    }
+
+    private func update(_ axis: Axis, _ change: (inout HeldScroll?) -> Void) {
+        switch axis {
+        case .vertical: change(&yHeld)
+        case .horizontal: change(&xHeld)
+        }
     }
 
     // MARK: - Frame loop
 
     private func animate(x: CGFloat) {
         let target = clampX(x)
-        if var s = xSpring { s.target = target; xSpring = s } else { xSpring = Spring(position: origin.x, target: target) }
+        if var s = xSpring { s.target = target; xSpring = s } else {
+            xSpring = Spring(position: origin.x, velocity: takeCoast(&xHeld), target: target)
+        }
         start()
     }
 
     private func animate(y: CGFloat) {
         let target = clampY(y)
-        if var s = ySpring { s.target = target; ySpring = s } else { ySpring = Spring(position: origin.y, target: target) }
+        if var s = ySpring { s.target = target; ySpring = s } else {
+            ySpring = Spring(position: origin.y, velocity: takeCoast(&yHeld), target: target)
+        }
         start()
+    }
+
+    /// Ends a coast after release so a spring can take over, returning its velocity (document points).
+    private func takeCoast(_ held: inout HeldScroll?) -> Double {
+        guard let h = held, !h.isHeld else { return 0 }
+        held = nil
+        return h.velocity / Double(scrollView.magnification)
     }
 
     private func start() {
@@ -194,14 +216,18 @@ final class Motion {
             point = origin
         }
 
-        if var c = continuous {
-            let target = Self.continuousSpeed / Double(scrollView.magnification) * Double(c.direction)
-            c.velocity += (target - c.velocity) * (1 - exp(-dt / Self.continuousRamp))
-            continuous = c
-            switch c.axis {
-            case .vertical: point.y = clampY(point.y + CGFloat(c.velocity * dt))
-            case .horizontal: point.x = clampX(point.x + CGFloat(c.velocity * dt))
-            }
+        let magnification = Double(scrollView.magnification)
+        if var h = yHeld {
+            let y = point.y + CGFloat(h.step(dt) / magnification)
+            point.y = clampY(y)
+            if abs(point.y - y) > 0.01 { h.hitEdge() }
+            yHeld = h.isStopped ? nil : h
+        }
+        if var h = xHeld {
+            let x = point.x + CGFloat(h.step(dt) / magnification)
+            point.x = clampX(x)
+            if abs(point.x - x) > 0.01 { h.hitEdge() }
+            xHeld = h.isStopped ? nil : h
         }
         if var s = ySpring {
             s.step(dt)
@@ -216,7 +242,7 @@ final class Motion {
         if point != origin { set(origin: point) }
         onFrame?(zoomSettled)
 
-        if xSpring == nil, ySpring == nil, zoom == nil, continuous == nil {
+        if xSpring == nil, ySpring == nil, zoom == nil, xHeld == nil, yHeld == nil {
             link.isPaused = true
             lastTimestamp = nil
         }
@@ -277,13 +303,4 @@ private struct ZoomAnimation {
         self.finalAnchor = finalAnchor
         self.viewPoint = viewPoint
     }
-}
-
-private struct Continuous {
-    var axis: Motion.Axis
-    var direction: CGFloat
-    var step: CGFloat
-    var startPosition: CGFloat
-    var startTime: CFTimeInterval
-    var velocity: Double
 }

@@ -49,8 +49,13 @@ public struct Config: Equatable, Sendable {
     public var glassTint: RGBColor?
     /// Corner radius of the pages in page points (0 for square corners).
     public var cornerRadius: Double = 0
-    /// `j`/`k`/`h`/`l`: a fraction of the viewport.
+    /// `5j` and other counted `j`/`k`/`h`/`l`: a fraction of the viewport per count.
     public var scrollStep: Double = 0.1
+    /// Holding `j`/`k`/`h`/`l`: full speed in screen points per second, and the seconds it
+    /// takes to reach it and, after release, to coast to a stop.
+    public var scrollSpeed: Double = 1300
+    public var scrollAccelTime: Double = 0.08
+    public var scrollDecelTime: Double = 0.2
     /// `+`/`-`: the zoom multiplier.
     public var zoomStep: Double = 1.25
     /// Dark mode's page and text colours.
@@ -88,7 +93,10 @@ public struct Config: Equatable, Sendable {
         # spread = "off"               # "pairs" | "book"
         # trim = false
         # rounded_corners = false      # true | a radius in page points
-        # scroll_step = 0.1
+        # scroll_step = 0.1            # 5j etc.: fraction of the window per count
+        # scroll_speed = 1300          # holding j/k/h/l: screen points per second
+        # scroll_accel_time = 0.08     # seconds to reach that speed (0: instantly)
+        # scroll_decel_time = 0.2      # seconds to coast to a stop after release (0: instantly)
         # zoom_step = 1.25
         # dark_paper = "#242424"
         # dark_ink = "#dbdbdb"
@@ -202,6 +210,16 @@ public struct Config: Equatable, Sendable {
                             warnings.append("[view] scroll_step: expected a number from 0.01 to 1"); continue
                         }
                         config.scrollStep = step
+                    case "scroll_speed":
+                        guard let speed = value.number, (100...10000).contains(speed) else {
+                            warnings.append("[view] scroll_speed: expected a number from 100 to 10000"); continue
+                        }
+                        config.scrollSpeed = speed
+                    case "scroll_accel_time", "scroll_decel_time":
+                        guard let time = value.number, (0...2).contains(time) else {
+                            warnings.append("[view] \(key): expected a number from 0 to 2"); continue
+                        }
+                        if key == "scroll_accel_time" { config.scrollAccelTime = time } else { config.scrollDecelTime = time }
                     case "zoom_step":
                         guard let step = value.number, (1.01...4).contains(step) else {
                             warnings.append("[view] zoom_step: expected a number from 1.01 to 4"); continue

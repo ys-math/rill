@@ -852,7 +852,9 @@ final class DocumentViewController: NSViewController {
         case .scrollRight: (.horizontal, 1)
         default: (.horizontal, -1)
         }
-        motion.beginContinuous(axis: axis, direction: direction, step: smallStep(axis))
+        let config = ConfigStore.shared.config
+        motion.beginContinuous(axis: axis, direction: direction, speed: config.scrollSpeed,
+                               accelTime: config.scrollAccelTime, decelTime: config.scrollDecelTime)
     }
 
     // MARK: - Actions
@@ -958,7 +960,7 @@ final class DocumentViewController: NSViewController {
         }
     }
 
-    /// `j`/`k` step: `scroll_step` of the viewport.
+    /// A counted `j`/`k` step (`5j`): `scroll_step` of the viewport.
     private func smallStep(_ axis: Motion.Axis) -> CGFloat {
         (axis == .vertical ? motion.viewport.height : motion.viewport.width) * ConfigStore.shared.config.scrollStep
     }

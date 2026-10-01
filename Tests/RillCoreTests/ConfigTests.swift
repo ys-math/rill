@@ -26,6 +26,9 @@ struct ConfigTests {
         trim = true
         rounded_corners = 10
         scroll_step = 0.25
+        scroll_speed = 2000
+        scroll_accel_time = 0.4
+        scroll_decel_time = 0
         zoom_step = 1.5
         dark_paper = "#1d2021"
         dark_ink = "#EBDBB2"
@@ -51,6 +54,9 @@ struct ConfigTests {
         #expect(config.trim)
         #expect(config.cornerRadius == 10)
         #expect(config.scrollStep == 0.25)
+        #expect(config.scrollSpeed == 2000)
+        #expect(config.scrollAccelTime == 0.4)
+        #expect(config.scrollDecelTime == 0)
         #expect(config.zoomStep == 1.5)
         #expect(config.darkPaper == RGBColor(red: 0x1d / 255.0, green: 0x20 / 255.0, blue: 0x21 / 255.0))
         #expect(config.darkInk == RGBColor(red: 0xeb / 255.0, green: 0xdb / 255.0, blue: 0xb2 / 255.0))
@@ -78,6 +84,9 @@ struct ConfigTests {
         glass_tint = "#0000"
         rounded_corners = "round"
         scroll_step = 2
+        scroll_speed = 50
+        scroll_accel_time = -1
+        scroll_decel_time = "slow"
         zoom_step = 1
         dark_paper = "#fff"
         dark_ink = 0.8
@@ -103,6 +112,9 @@ struct ConfigTests {
             #"[view] overlays: expected "blur" or "glass""#,
             #"[view] page_gap: expected a number from 0 to 100"#,
             "[view] rounded_corners: expected true, false or a number from 0 to 100",
+            "[view] scroll_accel_time: expected a number from 0 to 2",
+            "[view] scroll_decel_time: expected a number from 0 to 2",
+            "[view] scroll_speed: expected a number from 100 to 10000",
             "[view] scroll_step: expected a number from 0.01 to 1",
             "[view] zoom_step: expected a number from 1.01 to 4",
             "stray: settings belong in a [table]",
