@@ -123,6 +123,18 @@ struct TrimTests {
         #expect(trims[4] == trims[0]) // so does a page added since
     }
 
+    @Test func aWidePageDoesNotWidenTheOthers() {
+        let size = CGSize(width: 600, height: 800)
+        var boxes = [CGRect?](repeating: CGRect(x: 100, y: 100, width: 300, height: 600), count: 40)
+        boxes[10] = CGRect(x: 100, y: 100, width: 450, height: 600) // sticks out to the right
+        let profile = TrimProfile(contentBoxes: boxes, pageSizes: Array(repeating: size, count: 40), padding: 10)
+        let trims = profile.trims(for: Array(repeating: size, count: 40))
+        #expect(trims[0] == CGRect(x: 90, y: 90, width: 320, height: 620))
+        #expect(trims[12] == trims[0])
+        #expect(trims[10].minX == 90 && trims[10].maxX == 560) // shows all of its content
+        #expect(trims[10].minY == trims[0].minY && trims[10].height == trims[0].height)
+    }
+
     @Test func paddingStaysOnThePageAndOtherSizesShowWhole() {
         let profile = TrimProfile(contentBoxes: [CGRect(x: 2, y: 2, width: 596, height: 796)],
                                   pageSizes: [CGSize(width: 600, height: 800)], padding: 10)
