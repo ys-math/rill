@@ -2,10 +2,14 @@ import CoreGraphics
 
 /// Auto-trim: cut away the white margins around the text.
 ///
-/// Every page of the same size and parity gets the same trim (the union of their content),
-/// so the text block doesn't shift or resize from page to page, and a two-sided document's
-/// odd and even pages each lose their own gutter. Odd and even pages share their top and bottom,
-/// though, so facing pages in a spread are the same height.
+/// Every page of the same size and parity gets the same trim, so the text block doesn't shift
+/// or resize from page to page, and a two-sided document's odd and even pages each lose their
+/// own gutter. Odd and even pages share their top and bottom, though, so facing pages in a
+/// spread are the same height.
+///
+/// The shared left and right edges ignore the few pages that stick out sideways (a wide
+/// derivation or table), so those don't leave a wide margin on every other page. A page that
+/// sticks out gets a wider trim of its own, so nothing is cut off.
 public struct TrimProfile: Equatable, Sendable {
     struct Group: Hashable {
         var width: Int
@@ -20,16 +24,32 @@ public struct TrimProfile: Equatable, Sendable {
     }
 
     var trims: [Group: CGRect]
+    private var pageContent: [CGRect?]
+    private var padding: CGFloat
+
+    /// The share of pages in a group whose sideways extent the shared trim must cover.
+    private static let coverage = 0.9
 
     /// - Parameters:
     ///   - contentBoxes: each page's content in page display coordinates; nil for a blank page.
     ///   - padding: white space kept around the content, in points.
     public init(contentBoxes: [CGRect?], pageSizes: [CGSize], padding: CGFloat = 10) {
         var trims: [Group: CGRect] = [:]
+        var lefts: [Group: [CGFloat]] = [:]
+        var rights: [Group: [CGFloat]] = [:]
         for (index, box) in contentBoxes.enumerated() where index < pageSizes.count {
             guard let box, !box.isEmpty else { continue }
             let group = Group(page: index, size: pageSizes[index])
             trims[group] = trims[group].map { $0.union(box) } ?? box
+            lefts[group, default: []].append(box.minX)
+            rights[group, default: []].append(box.maxX)
+        }
+        // Left and right edges that cover most pages; top and bottom still cover all of them.
+        for (group, content) in trims {
+            let left = lefts[group]!.sorted(), right = rights[group]!.sorted()
+            let reach = Int((Self.coverage * Double(left.count - 1)).rounded(.down))
+            let minX = left[left.count - 1 - reach], maxX = right[reach]
+            trims[group] = CGRect(x: minX, y: content.minY, width: maxX - minX, height: content.height)
         }
         var shared = trims
         for (group, content) in trims {
@@ -45,12 +65,20 @@ public struct TrimProfile: Equatable, Sendable {
             trims[group] = content.insetBy(dx: -padding, dy: -padding).intersection(page).integral
         }
         self.trims = trims
+        self.pageContent = contentBoxes
+        self.padding = padding
     }
 
     /// The part of each page to show. Pages in a group with no content show whole.
     public func trims(for pageSizes: [CGSize]) -> [CGRect] {
         pageSizes.enumerated().map { index, size in
-            trims[Group(page: index, size: size)] ?? CGRect(origin: .zero, size: size)
+            guard let shared = trims[Group(page: index, size: size)] else { return CGRect(origin: .zero, size: size) }
+            // Widen for a page whose content sticks out of the shared edges.
+            guard index < pageContent.count, let content = pageContent[index], !content.isEmpty else { return shared }
+            let page = CGRect(origin: .zero, size: size)
+            let own = content.insetBy(dx: -padding, dy: 0).intersection(page)
+            let minX = min(shared.minX, own.minX.rounded(.down)), maxX = max(shared.maxX, own.maxX.rounded(.up))
+            return CGRect(x: minX, y: shared.minY, width: maxX - minX, height: shared.height)
         }
     }
 }
